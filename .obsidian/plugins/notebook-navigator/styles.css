@@ -201,7 +201,7 @@ body {
     --nn-theme-calendar-feature-image-overlay-color: rgb(0 0 0 / 0.05);
     --nn-theme-calendar-day-today-color: var(--nn-theme-calendar-day-in-month-color);
     --nn-theme-calendar-day-today-bg: var(--text-selection);
-    --nn-theme-calendar-day-active-border-color: #f94040;
+    --nn-theme-calendar-day-active-border-color: var(--interactive-accent);
     --nn-theme-calendar-day-active-border-width: 3px;
 
     /* -- Folder & Tag Items -- */
@@ -364,6 +364,9 @@ body {
     background-color: var(--nn-theme-list-search-active-bg);
     color: inherit;
     border-radius: 3px;
+    padding: 0;
+    font-weight: 600;
+    border-bottom: 1px solid currentColor;
 }
 
 /* Resets Obsidian's default view-content padding for cleaner integration */
@@ -2521,11 +2524,13 @@ button.nn-icon-button.nn-navitem-hover-action-button {
     --nn-calendar-note-indicator-center-offset: clamp(6px, calc(var(--nn-calendar-day-font-size) * 0.65), 12px);
     --nn-calendar-task-indicator-offset-x: clamp(5px, calc(var(--nn-calendar-day-font-size) * 0.42), 9px);
     --nn-calendar-weekend-corner-radius: 6px;
+    --nn-calendar-cell-radius: 6px;
     --nn-calendar-header-chip-bg: var(--nn-theme-nav-bg);
     --nn-calendar-note-indicator-color: var(--nn-theme-calendar-note-indicator-color);
     --nn-calendar-task-indicator-color: var(--nn-theme-calendar-unfinished-task-indicator-color);
     --nn-calendar-active-editor-border-color: var(--nn-theme-calendar-day-active-border-color);
     --nn-calendar-active-editor-border-width: var(--nn-theme-calendar-day-active-border-width);
+    --nn-calendar-active-editor-gap-color: var(--nn-theme-nav-bg);
 }
 
 .notebook-navigator-mobile :is(.nn-navigation-pane, .nn-list-pane, .nn-single-pane-calendar) {
@@ -2647,7 +2652,7 @@ button.nn-navigation-calendar-day {
     -webkit-appearance: none;
     appearance: none;
     border: none;
-    border-radius: 6px;
+    border-radius: var(--nn-calendar-cell-radius);
     cursor: pointer;
     box-shadow: none;
     outline: none;
@@ -2953,8 +2958,9 @@ button.nn-navigation-calendar-year-month {
 .nn-navigation-calendar-year-month.has-feature-image::before {
     content: '';
     position: absolute;
-    inset: 0;
-    border-radius: inherit;
+    /* Extends 0.5px past the cell so the highlight ring covers the antialiased edge of the background image. */
+    inset: -0.5px;
+    border-radius: calc(var(--nn-calendar-cell-radius) + 0.5px);
     background:
         linear-gradient(to bottom, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.03) 24%, rgba(255, 255, 255, 0) 48%),
         linear-gradient(
@@ -2972,10 +2978,12 @@ button.nn-navigation-calendar-year-month {
 .nn-navigation-calendar-active-outline {
     display: none;
     position: absolute;
-    inset: 0;
+    /* Extends 0.5px past the cell so the border covers the antialiased edge of the background image. */
+    inset: -0.5px;
     box-sizing: border-box;
     border: var(--nn-calendar-active-editor-border-width) solid var(--nn-calendar-active-editor-border-color);
-    border-radius: inherit;
+    border-radius: calc(var(--nn-calendar-cell-radius) + 0.5px);
+    box-shadow: inset 0 0 0 1px var(--nn-calendar-active-editor-gap-color);
     pointer-events: none;
     z-index: 2;
 }
@@ -3565,6 +3573,7 @@ button.nn-navigation-calendar-day {
 
 .nn-calendar-right-sidebar .nn-navigation-calendar {
     --nn-calendar-header-chip-bg: var(--nn-calendar-right-sidebar-bg);
+    --nn-calendar-active-editor-gap-color: var(--nn-calendar-right-sidebar-bg);
     --nn-calendar-header-font-size: 16px;
     --nn-calendar-today-font-size: 13px;
 }
@@ -3668,8 +3677,7 @@ button.nn-navigation-calendar-day {
     height: 100%;
 
     /* CSS Custom Properties for file items - themes can override these */
-    /* Isolate layout and style calculations per item while allowing ::before to extend beyond bounds */
-    contain: layout style;
+    contain: layout style paint;
 }
 
 /* Remove shadows */
@@ -3695,8 +3703,7 @@ button.nn-navigation-calendar-day {
     top: 0px;
     inset-inline-start: 0;
     inset-inline-end: 0;
-    /* Extend slightly beyond bottom item bounds (height rounding issue) to prevent hairline gaps when zoomed */
-    bottom: -0.5px;
+    bottom: 0;
     background-color: var(--nn-file-custom-bg-color);
     border-top-left-radius: var(--nn-file-top-left-radius, var(--nn-file-item-border-radius));
     border-top-right-radius: var(--nn-file-top-right-radius, var(--nn-file-item-border-radius));
@@ -3711,16 +3718,13 @@ button.nn-navigation-calendar-day {
     z-index: 2;
 }
 
-.nn-virtual-file-item-has-custom-background::after,
-.nn-virtual-file-item-has-custom-background-next::after {
-    display: none;
-}
-
+.nn-virtual-file-item-has-filled-background-previous > .nn-file,
 .nn-virtual-file-item-has-custom-background-previous > .nn-file.nn-has-custom-background {
     --nn-file-top-left-radius: 0;
     --nn-file-top-right-radius: 0;
 }
 
+.nn-virtual-file-item-has-filled-background-next > .nn-file,
 .nn-virtual-file-item-has-custom-background-next > .nn-file.nn-has-custom-background {
     --nn-file-bottom-left-radius: 0;
     --nn-file-bottom-right-radius: 0;
@@ -3788,7 +3792,11 @@ button.nn-navigation-calendar-day {
 
 /* Hide separator when flagged by renderer (selection) or context menu */
 .nn-virtual-file-item.nn-hide-separator-selection::after,
-.nn-virtual-file-item.nn-hide-separator-context-menu::after {
+.nn-virtual-file-item.nn-hide-separator-context-menu::after,
+.nn-virtual-file-item.nn-virtual-file-item-has-filled-background::after,
+.nn-virtual-file-item.nn-virtual-file-item-has-filled-background-next::after,
+.nn-virtual-file-item.nn-virtual-file-item-has-custom-background::after,
+.nn-virtual-file-item.nn-virtual-file-item-has-custom-background-next::after {
     display: none;
 }
 
@@ -3916,17 +3924,13 @@ button.nn-navigation-calendar-day {
     display: none;
 }
 
-.nn-manual-sort-row-hide-separator::after,
-.nn-manual-sort-row-has-custom-background::after,
-.nn-manual-sort-row-has-custom-background-next::after {
-    display: none;
-}
-
+.nn-manual-sort-row-has-filled-background-previous .nn-file,
 .nn-manual-sort-row-has-custom-background-previous .nn-file.nn-has-custom-background {
     --nn-file-top-left-radius: 0;
     --nn-file-top-right-radius: 0;
 }
 
+.nn-manual-sort-row-has-filled-background-next .nn-file,
 .nn-manual-sort-row-has-custom-background-next .nn-file.nn-has-custom-background {
     --nn-file-bottom-left-radius: 0;
     --nn-file-bottom-right-radius: 0;
@@ -3953,6 +3957,14 @@ button.nn-navigation-calendar-day {
     background-color: var(--nn-theme-list-separator-color);
     z-index: 100;
     pointer-events: none;
+}
+
+.nn-manual-sort-row.nn-manual-sort-row-hide-separator::after,
+.nn-manual-sort-row.nn-manual-sort-row-has-filled-background::after,
+.nn-manual-sort-row.nn-manual-sort-row-has-filled-background-next::after,
+.nn-manual-sort-row.nn-manual-sort-row-has-custom-background::after,
+.nn-manual-sort-row.nn-manual-sort-row-has-custom-background-next::after {
+    display: none;
 }
 
 .nn-manual-sort-file {
@@ -4026,6 +4038,56 @@ button.nn-navigation-calendar-day {
 .nn-file-word-count-suffix {
     color: var(--nn-theme-file-word-count-color);
     font-weight: var(--nn-theme-file-word-count-font-weight);
+}
+
+/* Keep aliases in normal text flow so title clamping can reveal or wrap each value independently. */
+.nn-file-alias-match {
+    display: inline;
+    margin-inline-start: 5px;
+    color: var(--nn-theme-foreground-muted);
+    font-size: 0.85em;
+    font-weight: normal;
+    vertical-align: baseline;
+}
+
+.nn-file-alias-match-icon {
+    display: inline-flex;
+    width: 1em;
+    height: 1em;
+    margin-inline-end: 2px;
+    vertical-align: -0.125em;
+}
+
+.nn-file-alias-match-icon svg {
+    width: 1em;
+    height: 1em;
+}
+
+/* Property evidence appears only while an internal property search is active. */
+.nn-file-property-search-evidence {
+    display: inline;
+    margin-inline-start: 5px;
+    color: var(--nn-theme-foreground-muted);
+    font-size: 0.85em;
+    font-weight: normal;
+    vertical-align: baseline;
+}
+
+.nn-file-property-search-evidence-key {
+    font-weight: 600;
+}
+
+.nn-file-property-search-evidence-icon {
+    display: inline-flex;
+    width: 1em;
+    height: 1em;
+    margin-inline-end: 2px;
+    vertical-align: -0.125em;
+}
+
+.nn-file-property-search-evidence-icon svg {
+    width: 1em;
+    height: 1em;
 }
 
 .nn-file-icon {
@@ -4524,6 +4586,7 @@ button.nn-navigation-calendar-day {
     height: 100%;
 }
 
+/* Inset highlight overlay - masked by the thumbnail image so it only covers opaque pixels */
 .nn-file-thumbnail--inset-highlight::before {
     content: '';
     position: absolute;
@@ -4535,6 +4598,19 @@ button.nn-navigation-calendar-day {
         inset 0 -1px 0 rgba(255, 255, 255, 0.05);
     pointer-events: none;
     z-index: 1;
+    mask-image: var(--nn-file-thumbnail-mask-image, none);
+    mask-repeat: no-repeat;
+}
+
+/* Mask geometry mirrors the img object-fit and object-position per variant */
+.nn-file-thumbnail--square.nn-file-thumbnail--inset-highlight::before {
+    mask-size: cover;
+    mask-position: center top;
+}
+
+.nn-file-thumbnail--natural.nn-file-thumbnail--inset-highlight::before {
+    mask-size: contain;
+    mask-position: center;
 }
 
 .nn-file-thumbnail--square .nn-file-thumbnail-img {
@@ -4807,6 +4883,12 @@ button.nn-navigation-calendar-day {
     font-weight: var(--nn-theme-navitem-custom-color-name-font-weight);
 }
 
+.nn-list-group-header-item-count {
+    flex: 0 0 auto;
+    font-weight: 400;
+    color: var(--nn-theme-foreground-muted);
+}
+
 .nn-list-group-header-path {
     display: inline-flex;
     align-items: center;
@@ -4953,6 +5035,64 @@ button.nn-list-group-header-collapse-button .nn-list-group-header-icon {
     border-right: none;
     border-bottom: 1px solid var(--nn-theme-divider-border-color);
 }
+/* Source: src/styles/sections/inline-rename.css */
+
+/* ========================================================================
+   Inline Rename Styles
+   ======================================================================== */
+
+.nn-inline-rename-input {
+    flex: 1 1 auto;
+    min-width: 0;
+    width: 100%;
+    box-sizing: border-box;
+    padding: 0 6px;
+    border: 1px solid var(--interactive-accent);
+    border-radius: 4px;
+    background-color: var(--background-primary);
+    color: var(--text-normal);
+    font: inherit;
+    line-height: normal;
+}
+
+.nn-inline-rename-input:focus {
+    outline: 2px solid var(--interactive-accent);
+    outline-offset: -2px;
+}
+
+.nn-inline-rename-input:disabled {
+    opacity: 0.75;
+}
+
+.nn-navitem-inline-rename {
+    height: calc(var(--nn-setting-nav-item-height) - 8px);
+    font-size: var(--nn-setting-nav-font-size);
+    font-weight: var(--nn-theme-navitem-name-font-weight);
+}
+
+.notebook-navigator-mobile .nn-navitem-inline-rename {
+    height: calc(var(--nn-setting-nav-item-height-mobile) - 10px);
+}
+
+.nn-file-name--inline-renaming {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    max-height: none;
+    overflow: visible;
+    white-space: nowrap;
+    word-break: normal;
+}
+
+.nn-file-name--inline-renaming .nn-file-ext-suffix {
+    flex-shrink: 0;
+}
+
+.nn-file-inline-rename {
+    height: var(--nn-file-title-line-height);
+    font-size: var(--nn-file-name-size-mobile, var(--nn-file-name-size));
+    font-weight: var(--nn-theme-file-name-font-weight);
+}
 /* Source: src/styles/sections/ui-empty-state.css */
 
 /* ========================================================================
@@ -4988,11 +5128,13 @@ button.nn-list-group-header-collapse-button .nn-list-group-header-icon {
     top: 0px;
     inset-inline-start: 0;
     inset-inline-end: 0;
-    /* Extend slightly beyond bottom item bounds (height rounding issue) to prevent hairline gaps when zoomed */
-    bottom: -0.5px;
+    bottom: 0;
     /* Pre-composited solid color prevents hairlines by blending alpha with pane background */
     background-color: var(--nn-selected-file-bg-color);
-    border-radius: var(--nn-file-item-border-radius);
+    border-top-left-radius: var(--nn-file-top-left-radius, var(--nn-file-item-border-radius));
+    border-top-right-radius: var(--nn-file-top-right-radius, var(--nn-file-item-border-radius));
+    border-bottom-left-radius: var(--nn-file-bottom-left-radius, var(--nn-file-item-border-radius));
+    border-bottom-right-radius: var(--nn-file-bottom-right-radius, var(--nn-file-item-border-radius));
     box-shadow: inset 0 0 0 var(--nn-theme-file-border-width) var(--nn-selected-file-border-color);
     z-index: 0; /* Below separator lines */
 }
@@ -5135,30 +5277,20 @@ body.nn-resizing {
     outline: none;
 }
 
-/* Empty placeholder to hide browser's default drag preview */
-.nn-drag-empty-placeholder {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    left: -9999px;
-    top: -9999px;
-    opacity: 0;
-}
-
-/* Drag ghost element - follows the cursor during drag */
-.nn-drag-ghost {
+/* Offscreen element used as the browser-native drag image */
+.nn-drag-native-preview {
     position: fixed;
+    left: -1000px;
+    top: -1000px;
+    display: inline-flex;
+    padding: 10px 0 0 12px;
     pointer-events: none;
     z-index: 999999;
     opacity: 0.9;
-    will-change: transform;
-    left: 0;
-    top: 0;
-    transform: translate(var(--nn-drag-ghost-x, -1000px), var(--nn-drag-ghost-y, -1000px));
 }
 
-/* Badge shown on drag ghost for multiple files - Apple-style red badge */
-.nn-drag-ghost-badge {
+/* Badge shown in the native drag image for multiple files */
+.nn-drag-preview-badge {
     background-color: #dc3545;
     color: white;
     font-weight: bold;
@@ -5173,8 +5305,8 @@ body.nn-resizing {
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
 }
 
-/* Icon shown on drag ghost for single file/folder - dark circular background */
-.nn-drag-ghost-icon {
+/* Icon shown in the native drag image for single items */
+.nn-drag-preview-icon {
     background-color: #000000; /* Default black for light mode */
     border-radius: 50%;
     display: inline-flex;
@@ -5186,12 +5318,12 @@ body.nn-resizing {
 }
 
 /* Dark mode: use dark gray background */
-.theme-dark .nn-drag-ghost-icon {
+.theme-dark .nn-drag-preview-icon {
     background-color: var(--background-modifier-border-hover);
 }
 
-/* Style the Lucide icon inside drag ghost - white icon */
-.nn-drag-ghost-icon svg {
+/* Style the Lucide icon inside the drag preview */
+.nn-drag-preview-icon svg {
     width: 16px;
     height: 16px;
     color: #ffffff;
@@ -5376,6 +5508,33 @@ body.nn-resizing {
     justify-content: flex-end;
     gap: 8px;
     margin-top: 16px;
+}
+
+/* YouTube play overlay shared by modal thumbnail links */
+.nn-youtube-play {
+    position: absolute;
+    top: var(--nn-youtube-play-y, 50%);
+    left: var(--nn-youtube-play-x, 50%);
+    width: 52px;
+    height: 36px;
+    transform: translate(-50%, -50%) scale(var(--nn-youtube-play-scale, 1));
+    border-radius: 8px;
+    background-color: #ff0000;
+    opacity: 0.9;
+    pointer-events: none;
+}
+
+.nn-youtube-play::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-40%, -50%);
+    width: 0;
+    height: 0;
+    border-style: solid;
+    border-width: 8px 0 8px 14px;
+    border-color: transparent transparent transparent #ffffff;
 }
 
 .nn-folder-note-type-modal .modal-content {
@@ -5808,6 +5967,7 @@ body.nn-resizing {
 }
 
 .nn-welcome-thumbnail-frame {
+    position: relative;
     display: block;
     width: 100%;
     aspect-ratio: 16 / 9;
@@ -5822,6 +5982,16 @@ body.nn-resizing {
     width: 100%;
     height: 100%;
     object-fit: cover;
+}
+
+.nn-welcome-youtube-play {
+    --nn-youtube-play-x: 80%;
+    --nn-youtube-play-y: 49%;
+    --nn-youtube-play-scale: 1.8;
+}
+
+.nn-welcome-thumbnail-link:hover .nn-welcome-youtube-play {
+    background-color: #cc0000;
 }
 
 .nn-welcome-buttons {
@@ -6058,33 +6228,7 @@ body.nn-resizing {
     font-size: 13px;
 }
 
-.nn-whats-new-youtube-play {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    width: 52px;
-    height: 36px;
-    transform: translate(-50%, -50%);
-    border-radius: 8px;
-    background-color: #ff0000;
-    opacity: 0.9;
-    pointer-events: none;
-}
-
-.nn-whats-new-youtube-play::before {
-    content: '';
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-40%, -50%);
-    width: 0;
-    height: 0;
-    border-style: solid;
-    border-width: 8px 0 8px 14px;
-    border-color: transparent transparent transparent #ffffff;
-}
-
-.nn-whats-new-youtube-link:hover .nn-whats-new-youtube-play {
+.nn-whats-new-youtube-link:hover .nn-youtube-play {
     background-color: #cc0000;
 }
 
@@ -6110,6 +6254,15 @@ body.nn-resizing {
     padding: 0 2px;
     border-radius: 3px;
     font-weight: 600;
+}
+
+.nn-whats-new-info code,
+.nn-whats-new-version li code {
+    color: var(--code-normal);
+    background-color: var(--code-background);
+    padding: 0.1em 0.35em;
+    border-radius: 4px;
+    font-size: 0.9em;
 }
 
 /* Support container */
@@ -6816,8 +6969,7 @@ body.nn-resizing {
 .nn-virtual-file-item {
     position: relative;
     height: var(--item-height);
-    /* Isolate layout and style calculations per item while allowing overlays to extend beyond bounds */
-    contain: layout style;
+    contain: layout style paint;
 }
 /* Source: src/styles/sections/settings-page.css */
 
@@ -7323,8 +7475,6 @@ button.nn-youtube-button svg {
 }
 
 .nn-preview-label,
-.nn-rgb-label,
-.nn-rgb-title,
 .nn-hex-title {
     font-size: 11px;
     color: var(--nn-theme-foreground-muted);
@@ -7385,99 +7535,121 @@ button.nn-youtube-button svg {
     height: 16px;
 }
 
-/* RGB sliders section */
-.nn-rgb-section,
+/* Visual color picker section */
+.nn-color-area-section,
 .nn-color-preview-section {
     padding-bottom: 15px;
 }
 
-.nn-rgb-section {
+.nn-color-area-section {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
     margin-bottom: auto; /* Push everything below to the bottom */
 }
 
-.nn-rgb-title {
-    margin-bottom: 6px;
+.nn-color-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
 }
 
-.nn-rgb-row {
+/* Header above the saturation/value area; matches the preset header height so the picker
+   lines up with the swatch grid in the left column. Hidden on mobile where the area sits
+   beside the sliders. */
+.nn-sv-header {
     display: flex;
     align-items: center;
-    gap: 8px;
+    min-height: 20px;
     margin-bottom: 8px;
 }
 
-.nn-rgb-row:last-child {
+.nn-sv-area {
+    position: relative;
+    width: 100%;
+    height: 150px;
+    border: 1px solid var(--background-modifier-border);
+    border-radius: var(--radius-m);
+    background-color: var(--nn-sv-hue, #ff0000);
+    background-image: linear-gradient(to top, #000000, rgba(0, 0, 0, 0)), linear-gradient(to right, #ffffff, rgba(255, 255, 255, 0));
+    cursor: crosshair;
+    touch-action: none;
+}
+
+.nn-sv-thumb {
+    position: absolute;
+    width: 14px;
+    height: 14px;
+    border: 2px solid #ffffff;
+    border-radius: 50%;
+    background: var(--nn-thumb-color, #ffffff);
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.5);
+    pointer-events: none;
+    transform: translate(-50%, -50%);
+}
+
+.nn-color-slider {
+    position: relative;
+    width: calc(100% - 16px);
+    height: 14px;
+    margin: 0 8px;
+    border-radius: 7px;
+    cursor: pointer;
+    touch-action: none;
+}
+
+.nn-hue-slider {
+    background: linear-gradient(
+        to right,
+        #ff0000 0%,
+        #ffff00 16.66%,
+        #00ff00 33.33%,
+        #00ffff 50%,
+        #0000ff 66.66%,
+        #ff00ff 83.33%,
+        #ff0000 100%
+    );
+}
+
+.nn-alpha-gradient {
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: linear-gradient(to right, rgba(0, 0, 0, 0), var(--nn-alpha-color, #000000));
+    pointer-events: none;
+}
+
+.nn-color-slider .nn-slider-thumb {
+    position: absolute;
+    top: 50%;
+    z-index: 1;
+    width: 16px;
+    height: 16px;
+    border: 2px solid #ffffff;
+    border-radius: 50%;
+    background: transparent;
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.5);
+    pointer-events: none;
+    transform: translate(-50%, -50%);
+}
+
+/* Hex input section - sits at the bottom of the picker, below the alpha slider */
+.nn-hex-section {
     margin-bottom: 0;
 }
 
-.nn-rgb-label {
-    width: 16px;
-}
-
-.nn-rgb-slider {
-    flex: 1;
-    height: 4px;
-    -webkit-appearance: none;
-    appearance: none;
-    background: var(--background-modifier-border);
-    border-radius: 2px;
-    outline: none;
-    cursor: pointer;
-}
-
-/* Slider thumb */
-.nn-rgb-slider::-webkit-slider-thumb {
-    -webkit-appearance: none;
-    appearance: none;
-    width: 16px;
-    height: 16px;
-    border-radius: 50%;
-    background: var(--interactive-accent);
-    cursor: pointer;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
-}
-
-.nn-rgb-slider::-moz-range-thumb {
-    width: 16px;
-    height: 16px;
-    border-radius: 50%;
-    background: var(--interactive-accent);
-    cursor: pointer;
-    border: none;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
-}
-
-/* RGB value display */
-.nn-rgb-value {
-    width: 32px;
-    text-align: right;
-    font-size: 11px;
-    color: var(--nn-theme-foreground-muted);
-    font-family: var(--font-monospace);
-}
-
-/* Color gradients for sliders */
-.nn-rgb-slider-r {
-    background: linear-gradient(to right, #000000, #ff0000);
-}
-
-.nn-rgb-slider-g {
-    background: linear-gradient(to right, #000000, #00ff00);
-}
-
-.nn-rgb-slider-b {
-    background: linear-gradient(to right, #000000, #0000ff);
-}
-
-/* Hex input section */
-.nn-hex-section {
-    margin-bottom: 20px;
+.nn-hex-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 6px;
 }
 
 .nn-hex-title {
     display: block;
-    margin-bottom: 6px;
     height: 17px; /* Match the preview label height for alignment */
+    margin-bottom: 0;
 }
 
 .nn-hex-container {
@@ -7595,9 +7767,12 @@ button.nn-youtube-button svg {
 }
 
 /* Preset and Recent colors sections */
-.nn-preset-section,
-.nn-recent-section {
+.nn-preset-section {
     margin-top: auto; /* Align to bottom */
+}
+
+.nn-recent-section {
+    margin-top: 0;
 }
 
 .nn-preset-colors,
@@ -7606,6 +7781,16 @@ button.nn-youtube-button svg {
     grid-template-columns: repeat(5, 1fr);
     gap: 6px;
     overflow: hidden;
+}
+
+.nn-recent-colors {
+    grid-template-columns: repeat(10, 36px);
+}
+
+.nn-recent-colors .nn-color-dot {
+    width: 36px;
+    height: 36px;
+    aspect-ratio: auto;
 }
 
 .nn-preset-colors {
@@ -7753,6 +7938,29 @@ button.nn-youtube-button svg {
         grid-template-columns: repeat(8, 1fr);
     }
 
+    .nn-sv-header {
+        display: none;
+    }
+
+    /* Saturation/value area on the left, hue + transparency + hex stacked on the right.
+       The SV area stretches to match the height of that stack. */
+    .nn-color-area-section {
+        flex-direction: row;
+        align-items: stretch;
+        gap: 14px;
+    }
+
+    .nn-sv-area {
+        flex: 1 1 0;
+        width: auto;
+        height: auto;
+    }
+
+    .nn-color-controls {
+        flex: 1 1 0;
+        min-width: 0;
+    }
+
     .modal.nn-color-picker-modal .modal-content {
         padding: 16px 16px 12px;
         gap: 12px;
@@ -7761,6 +7969,311 @@ button.nn-youtube-button svg {
     .nn-color-button-container {
         margin-top: 12px;
         padding-top: 12px;
+    }
+}
+/* Source: src/styles/sections/modal-appearance.css */
+
+/* ========================================================================
+   Appearance Modal - icon, foreground color, and background color editor
+   ======================================================================== */
+
+.modal.nn-appearance-modal {
+    width: 620px;
+    max-width: calc(100vw - 40px);
+    max-height: 86vh;
+}
+
+.modal.nn-appearance-modal .modal-content {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    box-sizing: border-box;
+    width: 100%;
+    padding: 16px;
+    overflow: hidden;
+}
+
+.modal.nn-appearance-modal .modal-close-button {
+    z-index: 10;
+    pointer-events: auto;
+}
+
+.nn-appearance-header {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 0;
+    padding: 14px 16px;
+    border: 1px solid var(--background-modifier-border);
+    border-radius: var(--radius-m);
+    background: var(--background-secondary);
+}
+
+@media (hover: hover) and (pointer: fine) {
+    .nn-appearance-preview-item:hover .nn-appearance-clear-button,
+    .nn-appearance-preview-item:focus-within .nn-appearance-clear-button {
+        opacity: 1;
+        visibility: visible;
+        pointer-events: auto;
+    }
+}
+
+.nn-appearance-clear-button.nn-appearance-clear-hidden {
+    display: none;
+}
+
+.nn-appearance-preview-item {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    max-width: 100%;
+    gap: 8px;
+    padding: 6px 14px;
+    border-radius: var(--radius-s);
+    background: var(--nn-preview-bg, var(--background-secondary));
+    color: var(--nn-preview-fg, var(--nn-theme-foreground));
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.nn-appearance-preview-icon {
+    display: inline-flex;
+    align-items: center;
+    flex: 0 0 auto;
+}
+
+.nn-appearance-preview-icon svg {
+    width: 18px;
+    height: 18px;
+}
+
+.nn-appearance-preview-icon-empty {
+    display: none;
+}
+
+.nn-appearance-preview-name {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.nn-appearance-tabs {
+    display: flex;
+    gap: 4px;
+    border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.nn-appearance-tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    padding: 7px 12px;
+    margin: 0 0 -1px;
+    border: 0;
+    border-bottom: 2px solid transparent;
+    border-radius: 0;
+    background: transparent;
+    color: var(--nn-theme-foreground-muted);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+}
+
+.nn-appearance-tab:hover {
+    color: var(--nn-theme-foreground);
+}
+
+.nn-appearance-tab.nn-active {
+    border-bottom-color: var(--interactive-accent);
+    color: var(--nn-theme-foreground);
+}
+
+.nn-appearance-tab-chip {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    overflow: hidden;
+    border: 1px solid var(--background-modifier-border);
+}
+
+.nn-appearance-tab-icon-chip {
+    width: 24px;
+    height: 24px;
+    border-radius: var(--radius-s);
+    color: var(--nn-theme-foreground);
+}
+
+.nn-appearance-tab-icon-chip svg {
+    width: 16px;
+    height: 16px;
+}
+
+.nn-appearance-tab-color-chip {
+    width: 32px;
+    height: 18px;
+    border-radius: 4px;
+}
+
+.nn-appearance-tab-chip-empty {
+    opacity: 0.55;
+}
+
+.nn-appearance-tab-label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.nn-appearance-body {
+    flex: 1 1 auto;
+    height: 360px;
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+
+.nn-appearance-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    height: 100%;
+    min-height: 0;
+}
+
+.nn-appearance-panel-hidden {
+    display: none;
+}
+
+.nn-appearance-reset-button {
+    padding: 4px 10px;
+    border: 1px solid var(--background-modifier-border);
+    border-radius: var(--radius-s);
+    background: transparent;
+    color: var(--nn-theme-foreground-muted);
+    font-size: 12px;
+    cursor: pointer;
+}
+
+.nn-appearance-reset-button:hover {
+    border-color: var(--background-modifier-border-hover);
+    color: var(--nn-theme-foreground);
+}
+
+.nn-appearance-reset-button.nn-appearance-reset-active {
+    border-color: var(--interactive-accent);
+    color: var(--interactive-accent);
+}
+
+.nn-appearance-picker-host {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    flex: 1 1 auto;
+    min-height: 0;
+}
+
+.nn-appearance-picker-host .nn-icon-provider-tabs {
+    margin-bottom: 0;
+}
+
+.nn-appearance-picker-host .nn-icon-search-container {
+    padding: 0 8px;
+    border-bottom: 0;
+}
+
+.nn-appearance-picker-host .nn-icon-results-container {
+    flex: 1 1 auto;
+    height: auto;
+    min-height: 0;
+}
+
+.nn-appearance-picker-host .nn-color-picker-content {
+    gap: 16px;
+    padding-bottom: 0;
+    overflow: visible;
+}
+
+.nn-appearance-picker-host .nn-color-picker-left {
+    flex-basis: 220px;
+}
+
+.nn-appearance-picker-host .nn-color-picker-left-no-preview .nn-preset-section {
+    margin-top: 0;
+}
+
+.nn-appearance-picker-host .nn-recent-section {
+    margin-top: 4px;
+}
+
+.nn-appearance-picker-host .nn-preset-header,
+.nn-appearance-picker-host .nn-hex-header,
+.nn-appearance-picker-host .nn-recent-header {
+    justify-content: flex-start;
+    gap: 8px;
+}
+
+.nn-appearance-picker-host .nn-recent-colors {
+    grid-template-columns: repeat(5, 1fr);
+}
+
+.nn-appearance-picker-host .nn-recent-colors .nn-color-dot {
+    width: auto;
+    height: auto;
+    aspect-ratio: 1;
+}
+
+.nn-icon-item.nn-icon-item-selected {
+    outline: 2px solid var(--interactive-accent);
+    outline-offset: -2px;
+}
+
+.nn-appearance-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding-top: 12px;
+    border-top: 1px solid var(--background-modifier-border);
+}
+
+.nn-appearance-footer-actions {
+    display: flex;
+    gap: 8px;
+}
+
+@media (max-width: 600px) {
+    .modal.nn-appearance-modal {
+        width: 100%;
+        max-width: calc(100vw - 20px);
+    }
+
+    .nn-appearance-tabs {
+        overflow-x: auto;
+    }
+
+    .nn-appearance-tab {
+        flex: 0 0 auto;
+    }
+
+    /* Size the body to its content rather than a fixed height so the modal adapts to large
+       fonts and display scaling. The base max-height caps it to the viewport and the body
+       scrolls instead of clipping. The modal resizes between tabs because each tab fits its
+       own content. */
+    .nn-appearance-body {
+        height: auto;
+        min-height: 0;
+    }
+
+    .nn-appearance-picker-host .nn-icon-results-container {
+        flex: 0 0 auto;
+        height: 240px;
+        min-height: 240px;
+    }
+
+    .nn-appearance-picker-host .nn-recent-colors {
+        grid-template-columns: repeat(8, 1fr);
     }
 }
 /* Source: src/styles/sections/theme-folder-colors.css */
@@ -8931,8 +9444,8 @@ settings:
         default-dark: '#'
     -
         id: nn-theme-calendar-day-active-border-color
-        title: Active day outline color
-        description: Border color for the outline shown on the active day in the calendar.
+        title: Selection outline color
+        description: Border color for active calendar outlines.
         type: variable-themed-color
         opacity: true
         format: rgb
@@ -8940,10 +9453,10 @@ settings:
         default-dark: '#'
     -
         id: nn-theme-calendar-day-active-border-width
-        title: Active day outline thickness
-        description: Border width for the outline shown on the active day in the calendar.
+        title: Selection outline thickness
+        description: Border width for active calendar outlines.
         type: variable-number-slider
-        default: 3
+        default: 2
         format: px
         min: 1
         max: 4
