@@ -234,7 +234,7 @@ scores = scores.masked_fill(mask == 0, float('-inf'))
 - **与 [[03_Transformer架构详解|Transformer 架构]] 的关系**：多头注意力是 Transformer 的核心子层
 - **与 [[04_位置编码|位置编码]] 的关系**：自注意力排列不变，位置编码为其注入顺序信息
 - **与 [[05_高效注意力机制|高效注意力]] 的关系**：GQA、MLA、FlashAttention 均为优化多头注意力的方法
-- **与 KV-Cache 的关系**：多头注意力的 K/V 缓存是推理优化的核心问题，参见 [[12_大模型推理与优化/01_KV-Cache机制]]
+- **与 KV-Cache 的关系**：多头注意力的 K/V 缓存是推理优化的核心问题，参见 [[../../K_AI工程化/03_推理工程/02_KV Cache与连续批处理|KV-Cache 与连续批处理]]
 
 ## 9. 前沿发展
 
@@ -257,7 +257,7 @@ scores = scores.masked_fill(mask == 0, float('-inf'))
 - [[10_大语言模型核心架构/02_注意力机制]] — LLM 视角（MQA/GQA/MLA）
 - [[04_位置编码]] — 注意力的位置信息补充
 - [[05_高效注意力机制]] — 高效注意力变体
-- [[12_大模型推理与优化/01_KV-Cache机制]] — 推理时的 K/V 缓存
+- [[../../K_AI工程化/03_推理工程/02_KV Cache与连续批处理|KV-Cache 与连续批处理]] — 推理时的 K/V 缓存
 
 ## References
 

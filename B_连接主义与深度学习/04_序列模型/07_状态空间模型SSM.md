@@ -1,12 +1,12 @@
-# 状态空间模型（SSM）
+# 状态空间模型（SSM）与 Mamba
 
 ## 1. 概述
 
-状态空间模型（State Space Model, SSM）源于控制论和信号处理中的连续时间线性系统理论，在深度学习中被重新发掘为一种高效的序列建模框架。SSM 通过一阶微分（或差分）方程描述系统的内部状态如何随输入和当前状态演化，以**线性复杂度**处理序列数据，成为近年来挑战 Transformer 注意力机制的最有潜力方向之一。
+状态空间模型（State Space Model, SSM）源于控制论和信号处理中的连续时间线性系统理论，在深度学习中被重新发掘为一种高效的序列建模框架。SSM 通过一阶微分（或差分）方程描述系统的内部状态如何随输入和当前状态演化，以**线性复杂度**处理序列数据，成为近年来挑战 Transformer 注意力机制的最有潜力方向之一。Mamba 是 SSM 家族中最重要的里程碑——它引入**选择性机制**，使 SSM 首次在语言建模质量上匹配 Transformer，因此本文将 S4（原型 SSM）与 Mamba（选择性 SSM）作为同一技术脉络统一讲解，而非割裂为两篇笔记。
 
 - **解决的问题**：Transformer 自注意力的 $\mathcal{O}(T^2)$ 计算复杂度在长序列（如 DNA 序列百万级、高分辨率视频）上成为瓶颈。SSM 以 $\mathcal{O}(T)$ 或 $\mathcal{O}(T \log T)$ 的复杂度实现长程依赖建模。
-- **核心模型**：S4（Structured State Space for Sequences）、Mamba（Selective SSM）、Mamba-2（SSD 框架）。
-- **关键意义**：SSM 展现了"不依赖注意力也能有效建模长序列"的可能性，是后 Transformer 时代最重要的架构探索方向之一。
+- **核心模型谱系**：S4（Structured State Space for Sequences，线性时不变）→ Mamba（Selective SSM，输入依赖）→ Mamba-2（SSD 框架，统一 SSM 与线性注意力）。
+- **关键意义**：SSM 展现了"不依赖注意力也能有效建模长序列"的可能性，是后 Transformer 时代最重要的架构探索方向之一，其优势依赖具体任务、硬件和训练配置，不应被视为 Transformer 的普遍替代。
 
 ## 2. 发展历史
 
@@ -17,7 +17,7 @@
 | 2021 | LSSL (Gu et al.) | 首次将 HiPPO 线性状态空间层应用于序列建模，展示了 SSM 处理长序列的潜力 |
 | 2022 | S4 (Gu et al.) | 引入结构化对角加低秩矩阵，使 SSM 的计算和存储从 $\mathcal{O}(T^2)$ 降至 $\mathcal{O}(T \log T)$，在 Long Range Arena 基准上超越所有现有方法 |
 | 2023 | S5 / H3 / Hyena | S5 提出并行扫描；H3（Hungry Hungry Hippos）将 SSM 与门控结合；Hyena 用长卷积替代注意力 |
-| 2023.12 | Mamba (Gu & Dao) | 引入**选择性 SSM**：使 $B, C, \Delta$ 依赖于输入 $x$，打破了 LTI 假设。结合硬件感知的并行扫描算法，实现了线性时间的训练和推理 |
+| 2023.12 | **Mamba** (Gu & Dao) | 引入**选择性 SSM**：使 $B, C, \Delta$ 依赖于输入 $x$，打破了 LTI 假设。结合硬件感知的并行扫描算法，实现了线性时间的训练和推理，首次使 SSM 在语言建模上匹配 Transformer |
 | 2024.05 | Mamba-2 / SSD (Dao & Gu) | 提出 SSD（State Space Duality）框架，统一了结构化 SSM 和线性注意力的矩阵变换视角。通过矩阵乘法的结构化分解，相比 Mamba 提速 2~8 倍 |
 | 2024 | Jamba (AI21 Labs) | SSM + Transformer 混合架构，交替使用 Mamba 层和注意力层，在长上下文任务中平衡效率和质量 |
 | 2024 | Mamba 扩展到视觉和基因组 | Vision Mamba (Vim)、VMamba、DNA Mamba 等，将 SSM 应用到多模态和科学计算领域 |
@@ -58,7 +58,7 @@ $$y_t = C h_t$$
 
 其中 $\Delta$ 是步长参数，控制输入信号的采样粒度——$\Delta$ 越小，$\bar{A}$ 越接近单位矩阵，系统"记住"得越久。
 
-### 3.4 选择性机制（Selection Mechanism）
+### 3.4 选择性机制（Selection Mechanism）：从 S4 到 Mamba 的关键跃迁
 
 传统 SSM（S4）是**线性时不变（LTI）** 系统——参数 $A, B, C, \Delta$ 对所有输入固定不变。Mamba 的关键突破是**选择性 SSM**：
 
@@ -67,17 +67,17 @@ $$B_t = s_B(x_t), \quad C_t = s_C(x_t), \quad \Delta_t = \tau_{\Delta}(\text{Par
 其中 $s_B, s_C, s_{\Delta}$ 是将输入 $x_t$ 映射到参数空间的小型线性投影。
 
 - **意义**：使模型能够根据当前输入内容，动态决定"忽略什么"和"记住什么"——这与 LSTM 的门控机制精神一致，但通过完全不同的数学路径实现
-- **代价**：LTI 系统的卷积计算优势消失，需要新的并行计算方法
+- **代价**：LTI 系统的卷积计算优势消失，需要新的并行计算方法（见 3.5）
 
 ### 3.5 并行扫描（Parallel Scan）
 
 选择性 SSM 不再可以通过 FFT 卷积计算（因为 $B_t, C_t$ 依赖于 $x_t$）。并行扫描是解决此问题的关键算法：
 
-给定序列操作 $x_1 \oplus x_2 \oplus \cdots \oplus x_T$，并行扫描在前缀和（Prefix Sum）的框架下高效计算所有中间状态。对于 SSM 的逐时间步递推，可将 $h_t$ 的计算转化为高度并行的前缀扫描操作，在 GPU 上实现接近 $\mathcal{O}(\log T)$ 的并行度。
+给定序列操作 $x_1 \oplus x_2 \oplus \cdots \oplus x_T$，并行扫描在前缀和（Prefix Sum）的框架下高效计算所有中间状态。对于 SSM 的逐时间步递推，可将 $h_t$ 的计算转化为高度并行的前缀扫描操作，在 GPU 上实现接近 $\mathcal{O}(\log T)$ 的并行度。这是 Mamba 能够以线性复杂度训练的工程关键。
 
 ## 4. 技术原理
 
-### 4.1 S4 的卷积模式
+### 4.1 S4 的卷积模式（LTI 系统）
 
 对于 LTI 系统，可将递推形式转化为卷积：
 
@@ -101,14 +101,14 @@ Mamba 块的设计：
 
 整体结构类似于 Transformer 块（归一化 → 混合器 → 残差），但混合器从自注意力替换为 SSM。
 
-### 4.3 Mamba-2 的 SSD 框架
+### 4.3 Mamba-2 的 SSD 框架：SSM 与注意力的统一
 
 SSD（State Space Duality）的核心理念：SSM 和线性注意力是**同一类矩阵变换**的两种视图：
 
 - **SSM 视图**：递推计算 $y = \text{SSM}(A, B, C)(x)$
 - **注意力视图**：$Y = (L \circ (Q K^T)) \cdot V$，其中 $L$ 是下三角掩码矩阵，$Q, K, V$ 与 $B(x), C(x), x$ 相关
 
-Mamba-2 将选择性 SSM 重新表述为结构化矩阵乘法，使其能利用 GPU 张量核心（Tensor Cores）的矩阵乘法硬件加速。相比 Mamba-1 在训练时可提速 2~8 倍，同时保持推理时的线性复杂度。
+Mamba-2 将选择性 SSM 重新表述为结构化矩阵乘法，使其能利用 GPU 张量核心（Tensor Cores）的矩阵乘法硬件加速。相比 Mamba-1 在训练时可提速 2~8 倍，同时保持推理时的线性复杂度。这一结果揭示了"注意力不需要 Softmax"的可能性，是 SSM 与 Transformer 两条技术路线在理论上的重要会师点。
 
 ### 4.4 时间复杂度对比
 
@@ -128,7 +128,7 @@ Mamba-2 将选择性 SSM 重新表述为结构化矩阵乘法，使其能利用 
 | Gu et al., *Efficiently Modeling Long Sequences with Structured State Spaces* (ICLR 2022) | S4：结构化对角加低秩矩阵，$\mathcal{O}(T \log T)$ 计算 | Long Range Arena (LRA) 基准上超越所有现有方法 |
 | Smith et al., *Simplified State Space Layers for Sequence Modeling* (ICLR 2023) | S5：简化 SSM 架构，引入并行扫描 | 使 SSM 更易于实现和理解 |
 | Fu et al., *Hungry Hungry Hippos* (ICLR 2023) | H3：SSM + 门控，在语言建模上接近 Transformer | 证明了 SSM 在语言建模上的竞争力 |
-| Gu & Dao, *Mamba* (2023) | 选择性 SSM + 硬件感知并行扫描 | 首次实现线性时间 SSM 在语言建模上匹配 Transformer |
+| Gu & Dao, *Mamba: Linear-Time Sequence Modeling with Selective State Spaces* (2023) | 选择性 SSM + 硬件感知并行扫描 | 首次实现线性时间 SSM 在语言建模上匹配 Transformer |
 | Dao & Gu, *Transformers are SSMs* (2024) | Mamba-2 / SSD：统一 SSM 与注意力的矩阵框架 | 理论突破 + 实际 2~8x 加速 |
 | AI21 Labs, *Jamba* (2024) | SSM-Transformer 混合架构 | 展示了混合架构在长上下文任务上的实际优势 |
 
@@ -146,6 +146,7 @@ Mamba-2 将选择性 SSM 重新表述为结构化矩阵乘法，使其能利用 
 2. **上下文学习能力待验证**：SSM 在 in-context learning 等需要"直接从上下文提取模式"的能力上，是否及如何超越注意力机制，仍在研究中
 3. **选择性机制的成本**：输入依赖的参数化增加了计算开销，Mamba-2 通过矩阵重构缓解
 4. **在部分任务上仍有差距**：在某些短上下文生成任务上，SSM 的生成质量仍低于同规模 Transformer
+5. **不应视为普遍替代**：SSM 相对 Transformer 的优势高度依赖任务类型（长序列 vs 短序列）、硬件（是否有张量核心加速）和训练配置
 
 ## 7. 应用场景
 
@@ -190,5 +191,11 @@ TTT（Test-Time Training）等最新工作在推理时对 SSM 的状态进行局
 ## 相关知识
 
 - 前置：[[01_循环神经网络RNN]]、[[00_序列模型_综述]]
-- 平级：[[04_Seq2Seq与注意力机制]]
-- 延伸：[[../10_大语言模型核心架构/02_注意力机制]]、[[../08_Transformer与注意力机制/05_高效注意力机制]]
+- 平级：[[04_Seq2Seq与交叉注意力]]
+- 延伸：[[../08_Transformer与注意力机制/05_高效注意力机制|高效注意力机制]]（SSM 与线性注意力的等价性）、[[08_长上下文与外部记忆|长上下文与外部记忆]]
+
+## References
+
+- Gu, Goel & Ré, *Efficiently Modeling Long Sequences with Structured State Spaces* (S4), ICLR 2022
+- Gu & Dao, *Mamba: Linear-Time Sequence Modeling with Selective State Spaces*, 2023
+- Dao & Gu, *Transformers are SSMs: Generalized Models and Efficient Algorithms Through Structured State Space Duality* (Mamba-2), ICML 2024

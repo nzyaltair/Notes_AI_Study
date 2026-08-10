@@ -165,4 +165,4 @@ $$4 \times [d_h \times (d_h + d_x) + d_h] = 4 \times d_h \times (d_h + d_x + 1)$
 
 - 前置：[[01_循环神经网络RNN]]、[[00_序列模型_综述]]
 - 平级：[[03_门控循环单元GRU]]
-- 延伸：[[04_Seq2Seq与注意力机制]]、[[../08_Transformer与注意力机制/03_Transformer架构详解]]
+- 延伸：[[04_Seq2Seq与交叉注意力]]、[[../08_Transformer与注意力机制/03_Transformer架构详解]]
