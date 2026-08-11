@@ -1,3 +1,13 @@
-# Transformer Scaling
+# Transformer 缩放
 
-Transformer 的性能随参数、数据和计算共同缩放。训练预算与数据配比的系统规律见 [[../../C_基础模型与通用智能/01_基础模型理论/00_基础模型理论_综述|基础模型理论]]。
+## 一句话理解
+
+Transformer 的损失常随计算、参数和数据出现经验缩放关系，但最佳配比和迁移收益依赖模型、数据与训练配方。
+
+## 相关知识
+
+[[../02_深度学习理论/09_Scaling_Law\|缩放规律]] · [[11_Decoder_only模型]] · [[14_MoE架构]]
+
+## References
+
+- Hoffmann et al. Training Compute-Optimal Large Language Models. *arXiv*, 2022.

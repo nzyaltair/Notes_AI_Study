@@ -1,3 +1,13 @@
-# Encoder-Decoder 模型
+# Encoder–Decoder 模型
 
-编码器处理条件输入，解码器通过交叉注意力生成输出，适合翻译、摘要和条件生成。
+## 一句话理解
+
+Encoder–Decoder Transformer 通过交叉注意力让生成端读取输入表示，适合机器翻译、摘要等条件生成。
+
+## 相关知识
+
+[[04_Seq2Seq与交叉注意力]] · [[11_Decoder_only模型]] · [[01_注意力机制原理]]
+
+## References
+
+- Vaswani et al. Attention Is All You Need. *NeurIPS*, 2017.

@@ -9,7 +9,7 @@
 本笔记聚焦**大语言模型架构中的 token embedding 层**这一组件。广义的向量表示（Word2Vec / GloVe 的词向量历史、SimCSE / BGE 等检索嵌入模型、RAG 向量召回）不属于 LLM 核心架构，见：
 
 - 词向量与早期表示学习（Word2Vec / GloVe / FastText / ELMo）→ [[01_词向量与早期表示学习]]（09_预训练语言模型 方向）
-- 检索嵌入模型与语义召回（SimCSE / E5 / BGE / Matryoshka / Late Chunking）→ [[19_LLM应用工程/03_RAG系统]]（19_LLM应用工程 方向）
+- 检索嵌入模型与语义召回（SimCSE / E5 / BGE / Matryoshka / Late Chunking）→ [[D_智能体与自主系统/06_Agent工程系统/03_RAG与检索增强/00_RAG系统|RAG 系统]]（Agent 工程系统方向）
 
 ## 核心概念
 
@@ -76,7 +76,7 @@ RMSNorm 去掉 LayerNorm 的减均值操作，计算更高效，LLaMA / Qwen / D
 
 ### 上下文嵌入（Contextual Embedding）
 
-LLM 每一层的隐藏状态都是"上下文感知的 token 嵌入"——同一 token 在不同上下文中得到不同向量。这是 LLM 相对静态词向量（Word2Vec）的根本优势。从 LLM 隐藏层提取嵌入用于下游任务（检索、分类）的方法见 [[19_LLM应用工程/03_RAG系统]]。
+LLM 每一层的隐藏状态都是"上下文感知的 token 嵌入"——同一 token 在不同上下文中得到不同向量。这是 LLM 相对静态词向量（Word2Vec）的根本优势。从 LLM 隐藏层提取嵌入用于下游任务（检索、分类）的方法见 [[D_智能体与自主系统/06_Agent工程系统/03_RAG与检索增强/00_RAG系统|RAG 系统]]。
 
 ## 应用场景
 
@@ -102,14 +102,14 @@ LLM 每一层的隐藏状态都是"上下文感知的 token 嵌入"——同一 
 - **要不要做权重 tying？** 小模型为省参数常 tying（GPT-2）；现代大模型多 untied，输入输出分别学习质量更优（LLaMA/Qwen/DeepSeek）。
 - **词表越大越好吗？** 不一定。大词表单 token 信息密度高、序列短，但 embedding 参数 $V\times d$ 增大（LLaMA 3 的 128K×4096≈5亿）；需在多语言/代码覆盖与参数预算间权衡。
 - **embedding 缩放 $\sqrt{d}$ 还需要吗？** 用绝对位置编码相加时需要（量纲匹配）；改用 RoPE 注入 + RMSNorm 后通常去掉。
-- **LLM 的 embedding 和 RAG 向量是一回事吗？** 不是。本笔记的 embedding 是模型输入查找表；RAG 检索向量是从隐藏层提取的语义嵌入，见 [[19_LLM应用工程/03_RAG系统]]。
+- **LLM 的 embedding 和 RAG 向量是一回事吗？** 不是。本笔记的 embedding 是模型输入查找表；RAG 检索向量是从隐藏层提取的语义嵌入，见 [[D_智能体与自主系统/06_Agent工程系统/03_RAG与检索增强/00_RAG系统|RAG 系统]]。
 
 ## 相关知识
 
 - [[01_词向量与早期表示学习]] — 词向量历史（Word2Vec/GloVe/FastText/ELMo）
 - [[03_位置编码]] — LLM 位置编码视角
 - [[10_大语言模型核心架构/01_LLM整体架构]] — LLM 整体架构
-- [[19_LLM应用工程/03_RAG系统]] — 检索嵌入模型与语义召回
+- [[D_智能体与自主系统/06_Agent工程系统/03_RAG与检索增强/00_RAG系统|RAG 系统]] — 检索嵌入模型与语义召回
 - [[00_多模态AI_综述]] — 多模态 token 对齐
 
 ## References

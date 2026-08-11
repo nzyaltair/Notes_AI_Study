@@ -1,3 +1,21 @@
+---
+title: "Agent 记忆"
+domain: "D-05"
+level: "核心"
+status: "稳定"
+last_reviewed: 2026-08-11
+review_cycle: 180
+evidence_level: "综述"
+source_of_truth: true
+tags:
+  - Agent记忆
+  - MemGPT
+  - 记忆流
+  - 反思
+created: 2026-07-28
+updated: 2026-08-11
+---
+
 # Agent记忆
 
 ## 1. 概述

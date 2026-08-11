@@ -1,5 +1,9 @@
 # 视觉 Transformer
 
+## 一句话理解
+
+视觉 Transformer（ViT）将 NLP 中的 Transformer 架构引入计算机视觉，用自注意力机制替代卷积进行图像特征提取——它证明了在大规模预训练下，纯注意力架构可以超越 CNN，开启了视觉领域的 Transformer 范式转变。
+
 ## 1. 概述
 
 Vision Transformer（ViT）将自然语言处理中的 Transformer 架构引入计算机视觉，用自注意力机制替代卷积进行图像特征提取。2020 年 Google 提出 ViT，证明在大规模数据预训练下，纯 Transformer 架构在图像分类上可以超越 CNN，开启了视觉领域的 Transformer 范式转变。
@@ -234,3 +238,18 @@ $$\mathcal{L} = \frac{1}{|\Omega_M|} \sum_{i \in \Omega_M} \| x_i - \hat{x}_i \|
 - **多模态统一架构**：统一视觉和语言的 Transformer 架构（如 Gemini）
 - **3D 视觉 Transformer**：Point Transformer、Voxel Transformer 用于 3D 场景理解
 - **自监督预训练统一**：MAE-CLIP 结合生成式和对比式预训练
+
+## 相关知识
+
+- **前置知识**：[[B_连接主义与深度学习/08_Transformer与注意力机制/02_Self-Attention与多头注意力|Self-Attention]]、[[B_连接主义与深度学习/08_Transformer与注意力机制/03_Transformer架构详解|Transformer 架构]]
+- **平级主题**：[[B_连接主义与深度学习/03_卷积神经网络与视觉学习/01_卷积运算与基础组件|CNN 基础]]
+- **后续延伸**：[[02_视频与时空智能/01_视频表示与理解|视频 Transformer]]、[[03_多模态理解与对齐/01_视觉语言模型|VLM]]
+
+## References
+
+- Dosovitskiy, A. et al. (2020). An Image is Worth 16x16 Words: Transformers for Image Recognition at Scale. *ICLR 2021*.
+- Liu, Z. et al. (2021). Swin Transformer: Hierarchical Vision Transformer using Shifted Windows. *ICCV 2021*.
+- Carion, N. et al. (2020). End-to-End Object Detection with Transformers. *ECCV 2020*.
+- Touvron, H. et al. (2021). Training data-efficient image transformers & distillation through attention. *ICML 2021*.
+- He, K. et al. (2021). Masked Autoencoders Are Scalable Vision Learners. *CVPR 2022*.
+- Liu, Z. et al. (2022). A ConvNet for the 2020s. *CVPR 2022*.

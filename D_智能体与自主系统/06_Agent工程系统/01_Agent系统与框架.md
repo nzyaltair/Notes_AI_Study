@@ -105,7 +105,7 @@ Agent 记忆的完整体系（架构分层、检索策略、巩固机制）见 [
 
 ### 工具使用（Tool Use）
 
-Agent通过Function Calling调用外部工具：信息获取（搜索引擎、RAG检索、数据库查询）、代码执行（Python沙箱、代码解释器）、文件操作、API调用、GUI操作（浏览器自动化、Computer Use）。详见 [[03_工具调用与MCP/00_工具调用与MCP_综述|工具调用与MCP]]。
+Agent通过Function Calling调用外部工具：信息获取（搜索引擎、RAG检索、数据库查询）、代码执行（Python沙箱、代码解释器）、文件操作、API调用、GUI操作（浏览器自动化、Computer Use）。详见 [[01_工具调用与MCP/00_工具调用与MCP_综述|工具调用与MCP]]。
 
 ### 多Agent协作
 
@@ -248,11 +248,11 @@ app = graph.compile(checkpointer=MemorySaver())  # 支持断点续行
 - Agent 的理论基础（理性主体、BDI、认知架构）见 [[../01_智能体理论基础/00_智能体理论基础_综述|D-01 智能体理论基础]]
 - Agent 以 [[../../C_基础模型与通用智能/02_语言基础模型/00_预训练语言模型_综述|大语言模型]] 为核心推理引擎
 - [[../../C_基础模型与通用智能/08_推理与思考/02_思维链与提示推理|思维链]] 和ReAct是Agent规划的基础
-- [[03_工具调用与MCP/00_工具调用与MCP_综述|工具调用与MCP]] 是Agent的行动能力
-- [[06_RAG与检索增强/00_RAG系统|RAG]] 是Agent的知识来源
-- [[08_提示工程|提示工程]] 定义Agent行为
-- Agent 的执行基础设施见 [[02_Agent_Runtime|Agent Runtime]]
-- Agent 工作流的落地设计见 [[04_工作流与编排/00_Agent工作流|Agent工作流]]
+- [[01_工具调用与MCP/00_工具调用与MCP_综述|工具调用与MCP]] 是Agent的行动能力
+- [[03_RAG与检索增强/00_RAG系统|RAG]] 是Agent的知识来源
+- [[05_提示工程|提示工程]] 定义Agent行为
+- Agent 的执行基础设施见 [[00_运行时与治理/01_Agent_Runtime|Agent Runtime]]
+- Agent 工作流的落地设计见 [[02_工作流与编排/00_Agent工作流|Agent工作流]]
 
 ## 9. 前沿发展
 
@@ -267,3 +267,34 @@ app = graph.compile(checkpointer=MemorySaver())  # 支持断点续行
 - **Agent框架标准化**：框架间互操作性提升，MCP等标准减少框架锁定
 - **声明式Agent**：从命令式编程走向声明式定义，Agent自动编排执行
 - **可视化Agent构建**：低代码/无代码Agent构建平台（Dify、Coze等）
+
+## 10. 常见问题
+
+**Q: Chain 和 Agent 有什么区别？**
+Chain 是预定义的固定调用序列（步骤和顺序在编写时确定）；Agent 由 LLM 在运行时动态决定下一步调用哪个工具、是否结束，具有更强的自适应性但也更难预测和调试。
+
+**Q: 为什么 LangGraph 逐渐取代 LangChain 的 Agent 模块？**
+LangChain 早期的 Agent 抽象（AgentExecutor）将控制流隐藏在框架内部，难以调试和定制中间步骤；LangGraph 用显式状态图暴露每个节点和边，开发者可以精确控制循环、分支与人工介入点。
+
+**Q: 单 Agent 能否通过增加工具数量无限扩展能力？**
+不能。当工具数量增多（通常 >15-20 个）时，LLM 在工具选择阶段的准确率会下降，此时应考虑拆分为多 Agent 分工，或引入工具检索/分层路由机制。
+
+## 相关知识
+
+- [[../01_智能体理论基础/00_智能体理论基础_综述|智能体理论基础]]：Agent 的理性主体、BDI 模型等理论前提
+- [[../03_规划与推理/00_规划与推理_综述|规划与推理]]：ReAct、Plan-and-Execute 等规划范式的理论来源
+- [[01_工具调用与MCP/00_工具调用与MCP_综述|工具调用与MCP]]：Agent 行动能力的工程实现
+- [[../05_记忆与持续学习/00_记忆与持续学习_综述|记忆与持续学习]]：Agent 记忆系统的完整体系
+- [[../07_Multi-Agent系统/00_Multi-Agent系统_综述|Multi-Agent系统]]：多智能体协作的深入理论
+- [[02_工作流与编排/00_Agent工作流|Agent工作流]]：Agent 任务执行流程的工程设计
+
+## References
+
+- Yao, S. et al. (2022). *ReAct: Synergizing Reasoning and Acting in Language Models*. arXiv:2210.03629.
+- Shinn, N. et al. (2023). *Reflexion: Language Agents with Verbal Reinforcement Learning*. arXiv:2303.11366.
+- Park, J. S. et al. (2023). *Generative Agents: Interactive Simulacra of Human Behavior*. arXiv:2304.03442.
+- Packer, C. et al. (2023). *MemGPT: Towards LLMs as Operating Systems*. arXiv:2310.08560.
+- [LangChain 官方文档](https://python.langchain.com/)
+- [LangGraph 官方文档](https://langchain-ai.github.io/langgraph/)
+- [AutoGen 官方文档](https://microsoft.github.io/autogen/)
+- [CrewAI 官方文档](https://docs.crewai.com/)

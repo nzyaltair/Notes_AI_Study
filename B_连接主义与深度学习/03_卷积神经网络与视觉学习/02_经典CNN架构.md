@@ -128,7 +128,7 @@ $$\mathbf{y} = \mathcal{F}(\mathbf{x}, \{W_i\}) + \mathbf{x}$$
 
 $$\frac{\partial \mathcal{L}}{\partial \mathbf{x}} = \frac{\partial \mathcal{L}}{\partial \mathbf{y}} \cdot \left(\frac{\partial \mathcal{F}(\mathbf{x})}{\partial \mathbf{x}} + I\right)$$
 
-恒等矩阵 $I$ 确保梯度至少有一条无损通道直达浅层，**彻底解决梯度消失问题**。
+恒等分支为梯度与信号提供直接路径，通常显著改善很深网络的优化条件；它并不在所有设置下“彻底解决”梯度消失或训练不稳定。
 
 **两种残差块**：
 
@@ -203,12 +203,12 @@ $$x_l = H_l([x_0, x_1, ..., x_{l-1}])$$
 |------|------|------|-----------------|-------------|----------|
 | LeNet-5 | 1998 | 5 | 60K | — | CNN范式奠基 |
 | AlexNet | 2012 | 8 | 60M | 15.3% | ReLU/Dropout/GPU |
-| VGG-16 | 2014 | 16 | 138M | 7.3% | 3×3统一卷积核 |
-| GoogLeNet v1 | 2014 | 22 | 5M | 6.7% | Inception多尺度 |
-| ResNet-50 | 2015 | 50 | 25M | 5.3% | 残差连接 |
-| ResNet-152 | 2015 | 152 | 60M | 4.5% | 极深残差网络 |
-| DenseNet-201 | 2017 | 201 | 20M | — | 密集连接 |
-| EfficientNet-B7 | 2019 | — | 66M | 2.9% | 复合缩放+NAS |
+| VGG-16 | 2014 | 16 | 138M | 7.5%（单模型，原论文） | 3×3统一卷积核 |
+| GoogLeNet v1 | 2014 | 22 | 5M | 6.7%（原论文） | Inception多尺度 |
+| ResNet-50 | 2015 | 50 | 25M | 5.25%（单模型，原论文） | 残差连接 |
+| ResNet-152 | 2015 | 152 | 60M | 4.49%（单模型，原论文） | 极深残差网络 |
+| DenseNet-201 | 2017 | 201 | 20M | 5.77%（原论文） | 密集连接 |
+| EfficientNet-B7 | 2019 | — | 66M | 2.9%（论文报告设置） | 复合缩放+NAS |
 
 ## 6. 优势与局限——按架构
 
@@ -238,7 +238,7 @@ $$x_l = H_l([x_0, x_1, ..., x_{l-1}])$$
 ## 8. 与其他技术关系
 
 - 残差连接 → [[00_Transformer与注意力机制_综述|Transformer]] 的 Add & Norm 设计
-- VGG的规整性 → [[../15_计算机视觉/05_图像分割|图像分割]] FCN直接复用VGG作为编码器
+- VGG 的规整性 → [[../../E_感知与多模态智能/01_视觉表示与视觉理解/05_图像分割\|图像分割]] 中的早期 FCN 编码器设计
 - ResNet的Bottleneck设计 → MobileNet v2倒置残差（Inverted Residual）的来源
 - Inception的多尺度思想 → FPN（特征金字塔）的多尺度特征融合
 - ConvNeXt → [[06_CV前沿发展]] 中CNN现代化的里程碑
