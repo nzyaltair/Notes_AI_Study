@@ -33,3 +33,28 @@ MLOps 管理数据、代码、实验、模型和部署的生命周期，使机�
 ## 与 LLMOps 的边界
 
 LLM 的提示、Trace、网关和 Agent 运行问题由 [[../06_LLMOps与AgentOps/00_LLMOps与AgentOps综述]] 独立处理。
+
+## 学习路径
+
+1. 前置：[[../02_训练工程/00_训练工程_综述]]（实验与模型产出）
+2. 基础：[[01_模型服务化]] → [[03_容器化与Docker]] → [[04_监控与日志]]
+3. 治理：[[02_API设计与治理]] → [[05_版本管理与回滚]] → [[06_成本控制与配额]]
+4. 合规：[[07_数据隐私与合规]]
+5. 下游：[[../06_LLMOps与AgentOps/00_LLMOps与AgentOps综述]]（LLM 专项运维）
+
+## 相关知识
+
+- [[../02_训练工程/00_训练工程_综述]]（前置：实验与模型注册）
+- [[../03_推理工程/00_推理工程_综述]]（同层：模型服务依赖推理引擎）
+- [[../06_LLMOps与AgentOps/00_LLMOps与AgentOps综述]]（延伸：LLM 专项运维）
+- [[../08_AI基础设施/00_AI基础设施综述]]（支撑：容器编排与 GPU 调度）
+- [[../09_AI可靠性工程/00_AI可靠性工程综述]]（相关：SLO 与故障恢复）
+
+## References
+
+- Sculley et al., *Hidden Technical Debt in Machine Learning Systems* (NIPS 2015)
+- Breck et al., *The ML Test Score: A Rubric for ML Production Readiness and Technical Debt Reduction* (2017)
+- Kreuzberger et al., *Machine Learning Operations (MLOps): Overview, Definition, and Architecture* (2023)
+- MLflow Documentation, *MLflow: An Open Source Platform for the Machine Learning Lifecycle* (2024)
+- Huyen, *Designing Machine Learning Systems* (O'Reilly, 2022)
+- Burns et al., *Kubernetes: Up and Running* (O'Reilly, 2022)

@@ -12,6 +12,16 @@ tags: [AGI理论, 智能定义, 认知架构, 通用智能]
 2. 系统如何将感知、世界模型、推理、规划、行动、记忆与学习闭环？
 3. 如何评价跨任务泛化、因果理解、长期自主性和开放性？
 
+## 发展历史
+
+| 阶段 | 代表工作 | 关键贡献 |
+|---|---|---|
+| 1950s-1970s | Turing Test、Logic Theorist、GPS | 提出"机器能否思考"与通用问题求解设想 |
+| 1980s | SOAR、ACT-R | 统一认知架构，将记忆、学习与决策纳入单一框架 |
+| 1990s-2000s | Newell *Unified Theories of Cognition*、通用智能定义 | 从任务系统走向通用性理论；Legg & Hutter 给出通用智能的抽象定义 |
+| 2010s | DeepMind AGI 讨论、Lake et al. | 从"构建能思考的机器"转向"构建能学习的机器" |
+| 2020s | Chollet ARC、DeepMind AGI Levels | 将 AGI 从口号转化为可操作的能力分级与评测 |
+
 ## 统一能力框架
 
 ```text
@@ -29,6 +39,7 @@ tags: [AGI理论, 智能定义, 认知架构, 通用智能]
 | 系统机制 | 涌现、自组织、协作 | 复杂系统与涌现智能 |
 | 长程演化 | 变异、选择、生态 | 人工生命与进化智能 |
 | 持续开放 | 自主目标、探索、技能积累 | 开放式智能 |
+| 方法学自检 | 实验设计、证据评估、可复现性 | 研究方法与证据评估 |
 
 ## 学习导航
 
@@ -36,14 +47,22 @@ tags: [AGI理论, 智能定义, 认知架构, 通用智能]
 - [[02_认知架构与AGI系统架构]]：从模块列表走向闭环系统设计。
 - [[../01_神经符号智能/00_神经符号智能_综述]]：学习与逻辑如何协作。
 - [[../02_因果智能/00_因果智能_综述]]：如何由相关性走向机制理解。
+- [[../08_研究方法与证据评估/00_研究方法与证据评估_综述]]：如何验证任何"统一理论"主张。
 
 ## 与其他板块的边界
 
-C、D、F、G、H 分别提供模型、行动、环境理解、身体和人类认知证据；I 提炼跨模块的计算原理与下一代架构假设。任何“统一理论”都应同时接受能力评测、安全约束与现实环境检验。
+C、D、F、G、H 分别提供模型、行动、环境理解、身体和人类认知证据；I 提炼跨模块的计算原理与下一代架构假设。任何"统一理论"都应同时接受能力评测、安全约束与现实环境检验——这正是 08 方法学方向存在的理由。
+
+## 前沿发展
+
+- **能力分级可操作化**：DeepMind AGI Levels 从性能（深度）× 通用性（广度）× 自主性三个正交维度描述系统，避免"AGI 是/否"的二元争论。
+- **评测超越静态基准**：从固定数据集走向交互式、对抗式、纵向持续评测，对应 [[../08_研究方法与证据评估/04_基准设计与数据污染]]。
+- **架构从模块堆叠走向闭环验证**：LLM+工具+记忆的 Agent 系统与 SOAR/ACT-R 的架构假设在收敛，但尚无实证确认的唯一统一架构。
 
 ## 参考线索
 
-- Legg & Hutter, *Universal Intelligence*
-- Newell, *Unified Theories of Cognition*
-- Lake et al., *Building Machines That Learn and Think Like People*
-- Chollet, *On the Measure of Intelligence*
+- Legg & Hutter, *Universal Intelligence*（2007）
+- Newell, *Unified Theories of Cognition*（1990）
+- Lake et al., *Building Machines That Learn and Think Like People*（2016）
+- Chollet, *On the Measure of Intelligence*（2019）
+- Morris et al., *Levels of AGI: Operationalizing Progress on the Path to AGI*, ICML 2024
