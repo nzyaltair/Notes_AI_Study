@@ -6,7 +6,7 @@ tags:
   - ContinuousBatching
   - AI工程
 created: 2026-08-10
-updated: 2026-08-10
+updated: 2026-08-24
 ---
 
 # KV Cache 与连续批处理
@@ -87,9 +87,69 @@ $$\text{KV-Cache Size} = 2 \times n_{layers} \times n_{kv\_heads} \times d_{head
 | GQA (Grouped-Query Attention) | $< n_{heads}$, 通常 8 | $\frac{n_{kv\_heads}}{n_{heads}}$ × 基准 | 接近 MHA | LLaMA-2 70B, LLaMA-3 |
 | MQA (Multi-Query Attention) | 1 | $\frac{1}{n_{heads}}$ × 基准 | 略有下降 | PaLM, Falcon |
 
-GQA 是质量和显存的最佳平衡点，已成为现代 LLM 的事实标准。
+GQA 是质量和显存的最佳平衡点，已成为现代 LLM 的事实标准。但 GQA 论文的精度结论需打折看待——后续 DeepSeek 的实验表明其确有负面影响，任何有损压缩都应在目标任务上复测精度。
 
-### 3.4 静态批处理 vs 连续批处理
+**进一步压缩 KV Cache 的架构手段**（原理详见 [[../../B_连接主义与深度学习/08_Transformer与注意力机制/05_高效注意力机制|高效注意力机制]]）：
+
+| 手段 | 思路 | 共享维度 |
+|:---|:---|:---|
+| GQA | 减少每组共享的 KV 头数 | 头间共享 |
+| MLA（DeepSeek-V2/V3） | 不减少 KV 头数，而是把激活投影到低维潜在向量 $c_t$，缓存只存 $c$（7168 维压至 512 维），精度接近甚至略优于 MHA | 低秩压缩 |
+| CLA（跨层注意力） | 相邻层直接复用上一层的 KV Cache | 层间共享 |
+| 滑动窗口注意力 | 只缓存最近 K 个 token，KV Cache 与序列长度无关 | 时间维截断 |
+| 线性注意力 / SSM | 将全部历史压缩为固定大小递归状态，彻底摆脱 KV Cache | 状态压缩 |
+
+滑动窗口的实际有效上下文比标称窗口大（信息可沿层间传递），也可与全局注意力交错混用以兼顾长程依赖。由于推理系统是访存受限的，**压缩 KV Cache 可同时改善延迟与吞吐**（二者并不总是冲突），还能腾出显存支撑更大 batch。
+
+### 3.4 两阶段的算术强度：为什么生成是访存受限
+
+这是理解一切推理优化的高层要点：**训练时能看到全部 token，可在序列维度并行计算；推理受自回归约束必须逐 token 生成，无法在序列维度并行**，因此很难达到高算术强度、很难喂饱算力。
+
+符号约定：$B$（批大小/并发请求数）、$S$（输入 token 数）、$T$（输出 token 数；Prefill 时 $T=S$，Decode 时 $T=1$）、$D$（模型维度）、$F$（FFN 中间维度 $\approx 4D$）。
+
+**MLP 层**：本质是一次大矩阵乘法，且**权重跨序列共享**——
+
+$$\text{AI}_{MLP} \approx \frac{2B\,T\,D\,F}{2(BTD + DF + BTF + \cdots)} \;\xrightarrow{BT \ll DF}\; B \cdot T$$
+
+- Prefill（$T=S$）：$\text{AI} = B \cdot S$，大批量 + 长序列即可达到计算受限
+- Decode（$T=1$）：$\text{AI} = B$（并发请求数），batch 够大即可应付
+
+**Attention 层**：FLOPs $\approx 2BSTD$（QKV 投影 + 注意力计算），但访存量随 KV Cache 规模线性增长，推导可得系数为 $\frac{ST}{S+T}$：
+
+$$\text{AI}_{Attn} \approx \frac{S\,T}{S+T} \times \text{(常数)}$$
+
+- Prefill（$T=S$）：$\text{AI} = S/2$，**与 batch 无关**——序列够长即可
+- Decode（$T=1$）：$\text{AI} = \frac{S}{S+1} \approx 1$——远低于 H100 的硬件平衡点（$\approx 295$ FLOP/Byte），纯访存瓶颈
+
+**为什么增大 B 对 Attention 无效**：MLP 权重只需从 HBM 加载一次即可处理整批序列（成本摊薄）；而 Attention 的 KV Cache 依赖 $B$——每个序列有独立缓存，增大 $B$ 只是把多个互不相干的小矩阵乘法拼在一起，本质是 batched 点积，点积的算术强度极低。这就是注意力成为 Decode 阶段根本瓶颈的原因。
+
+| 阶段 | MLP 算术强度 | Attention 算术强度 | 结论 |
+|:---|:---|:---|:---|
+| Prefill | $B \cdot S$ | $S/2$ | **计算受限**（compute-bound） |
+| Decode | $B$ | $\approx 1$ | **访存受限**（memory-bound） |
+
+> 这就是"LLM 推理是访存受限的"这一说法的严格含义：只要仍使用 Transformer 架构，Decode 阶段 Attention 的低算术强度就无法根治，只能围绕它优化。
+
+### 3.5 延迟与吞吐量的定量模型（LLaMA-2-13B on H100）
+
+访存受限反而简化了性能分析：假设通信与计算重叠，**耗时 ≈ 需搬运的字节数 ÷ HBM 带宽**。
+
+$$\text{总显存} = \underbrace{2 \times 13\text{B}}_{\text{参数（BF16）} \approx 26\,\text{GB}} + B \times \underbrace{(\text{单序列 KV Cache})}_{\text{随序列长度线性增长}}$$
+
+- **延迟（秒/token）= 显存搬运量 ÷ 带宽**：是 $B$ 的线性函数（常数项是参数，线性项是 KV Cache——批越大，每步要读写的 KV Cache 越多）
+- **吞吐量 = $B$ ÷ 延迟**：随 $B$ 增大而提升并逼近渐近线（参数读取成本被摊薄），最终受显存容量限制——$B$ 大到 KV Cache 超出 HBM 时无法继续扩批
+
+LLaMA-2-13B on H100 的量级：$B=1$ 时延迟约 8 ms/token、吞吐约 124 tokens/s；扩到 $B=64$ 后延迟上升、吞吐显著提升；继续扩批则撞上显存上限。
+
+由此得到三个推论：
+
+1. **延迟与吞吐的取舍集中在 batch 维度**：小 batch 低延迟低吞吐，大 batch 高吞吐高延迟（"等公交"效应：等的人一起上车，单程变慢但运力更高）
+2. **TTFT ≈ Prefill 时间**：追求快 TTFT 要小 batch，追求高吞吐要大 batch，服务需按 SLO 折中
+3. **压缩 KV Cache 是免费午餐**：省下的显存既直接降延迟，又允许更大 batch 提吞吐——延迟和吞吐可以同时改善（GQA 实测即如此）
+
+多副本并行是另一维度：启动 $M$ 个独立模型副本，延迟不变、吞吐提升 $M$ 倍。
+
+### 3.6 静态批处理 vs 连续批处理
 
 **静态批处理（Static Batching）**：
 
@@ -167,6 +227,7 @@ PagedAttention 是 vLLM 的核心创新，借鉴操作系统虚拟内存的分�
 - **块表（Block Table）**：每个请求维护逻辑块到物理块的映射
 - **按需分配**：仅在生成新 token 时分配新块
 - **即时释放**：请求完成后其所有块立即归还空闲池
+- **写时复制（Copy-on-Write）**：共享相同前缀的请求引用同一物理块；仅当各请求采样出不同 token（前缀分叉）时才复制拆分该块，前缀共享最大化
 
 **性能收益**：
 - 显存浪费从 60-80% 降至 < 4%
@@ -205,6 +266,8 @@ while True:
         token = sample(req.logits)
         req.append_token(token)
 ```
+
+**选择性批处理（Selective Batching）**：变长请求拼批时，注意力计算依赖各序列自身长度、无法直接共享张量；而 MLP 等逐 token 计算不依赖序列长度，可将所有序列拼接成一条超长序列统一处理。这是 Orca 实现连续批处理的关键工程技巧。
 
 **调度策略权衡**：
 
@@ -254,6 +317,9 @@ Chunked Prefill（将 Prefill 切块）：
 - **哈希匹配**：对 token 序列计算哈希，匹配已有的 KV Cache 块
 - **引用计数**：共享块维护引用计数，所有请求结束后才释放
 - **LRU 逐出**：显存不足时按最近最少使用逐出非共享块
+- **写时复制**：与 PagedAttention 块管理天然配合——共享前缀只存一份，采样分叉处才拆块（见 4.1）
+
+**同一 Prompt 多次采样**（Best-of-N、多候选回复）是另一高频场景：所有样本共享 Prompt 的 KV Cache，各自只生成独立后续——System Prompt 越长、并发样本越多，收益越大。
 
 **SGLang 的 RadixAttention** 进一步使用基数树（Radix Tree）管理前缀：
 - 树节点对应一段 token 序列的 KV Cache
@@ -330,11 +396,111 @@ Chunked Prefill（将 Prefill 切块）：
 
 ## 8. 前沿发展
 
+> CS336 视角（P18 Dan Fu 讲座）：推理系统的现状可用"非常早期"形容——很多今天看起来复杂的技术，10-20 年后回看可能被认为"显而易见"。以下内容融合了来自 Together AI 生产环境和 UCSD 研究实验室的一线实践。
+
+### 8.1 Token 的完整生命周期（生产视角）
+
+> CS336 P18 视角：从系统层面审视推理全流程，远比训练时的单循环复杂。
+
+一次推理请求从进入到返回 token，经历多个环节：
+
+```
+请求进入 → 路由分配 GPU
+  → 查 KV Cache（前缀是否命中？）
+  → Prefill（计算密集）或 Decode（访存密集）
+  → 跨机器拆分（张量/流水线/专家并行）
+  → Token 采样 → 安全检查/停止判断 → 输出
+```
+
+**生产负载特征**（与训练截然不同）：
+- **代码生成**：输入上万 token（代码库上下文），输出可能很短或包含"思考 token"
+- **多轮对话 / Agent**：多回合交互，每轮新增 token 数不一，回合间可能有较长空档
+- **批处理任务**：如翻译整本书——输入长、KV Cache 不重要（看一次就走）
+- **交互式应用**：要求 1 秒内返回首 token，用户感知"正在思考"
+
+### 8.2 Prefill/Decode 分离部署的深化
+
+已有 §4.3 讨论了 Chunked Prefill，P18 进一步揭示**分离部署**的实际价值与产业实践：
+
+| 维度 | Prefill | Decode |
+|:---|:---|:---|
+| 计算特性 | 计算密集（类似训练前向） | 访存密集（每步加载全部权重） |
+| 耗时 | 通常比单次 Decode 久得多 | 步骤多得多（每个 token 一次） |
+| 硬件理想配置 | GPU（高算力） | 专用芯片（高带宽） |
+
+**产业实践**：
+- **NVIDIA 收购 Groq**：计划用 GPU 处理 Prefill，用 Groq LPU 芯片做 Decode
+- **OpenAI × Cerebras**：Cerebras 的晶圆级芯片在 Decode 阶段表现更强
+- **SambaNova** 等公司也在不同环节下注
+
+**Cache-aware Prefill-Decode Segregation**（Together AI 2024）：
+- 核心洞察：多轮对话中约 90% 的请求是"预热请求"（已有历史 KV Cache），仅 10% 是全新请求
+- 新请求（数千 token Prefill）不应与进行到一半的短对话 Decode 混在同一批 GPU 上
+- **路由层仅改两行代码**：按缓存命中率将请求分流到不同 GPU 组
+- **效果**：服务速度最高提升 40%
+
+### 8.3 KV Cache 分层存储：GPU → CPU → SSD
+
+> CS336 P18 视角：KV Cache 越大越好——能缓存的会话越多，能跑的任务就越多。
+
+生产环境中 KV Cache 的存储层级与操作系统内存管理高度类似（LRU 驱逐启发式在最差情况下也仅比最优解差 2 倍）：
+
+```
+GPU HBM（热数据）→ CPU DDR（温数据）→ NVMe SSD（冷数据）
+~400 cycles        ~10 μs             ~100 μs
+```
+
+**层级选择逻辑**：
+- **GPU HBM**：活跃会话的 KV Cache，访问最快但容量有限
+- **CPU DDR**：GPU 显存不够时的溢出层；Jensen Huang 近年开始强调 CPU 性能（上一代 CPU 成了很多任务的瓶颈——50 万美元的机器被 1000 美元 CPU 拖后腿）
+- **SSD**：冷数据存储；传闻 OpenAI 大量抢购 SSD 和内存即为此场景
+
+**驱逐与预取策略**：
+- **LRU 驱逐**：长时间未访问的 KV Cache 从 GPU 逐出到 CPU/SSD
+- **预测未来**：用户打开聊天应用翻出旧对话 → 大概率要针对它提问 → 提前将 KV Cache 从 SSD 加载到 GPU
+- **请求恢复**：请求到来时从 CPU/SSD 取回 KV Cache，重新加载进系统
+
+### 8.4 大规模推理的容错与调试
+
+> CS336 P18 视角：大规模系统有个特点——小规模下正常的大规模下必然出错。
+
+**典型生产 Bug**（概率 < 0.001%，但日处理万亿 token 时必然出现）：
+
+| Bug 现象 | 根因 |
+|:---|:---|
+| 模型反复输出同一 token（"hi hi hi"） | 某个 kernel 略有错误，特定条件下 logits 变 NaN |
+| 工具调用死循环（"去搜一下...去搜一下..."） | 引擎处理工具调用的逻辑与后端代码不匹配 |
+| 模型突然蹦出中文字符 | kernel 中的 off-by-one 错误导致 GPU 读到未初始化内存，注意力机制将其解释为中文 token |
+
+这些 Bug 的共同特征：**不是模型问题，而是推理引擎的 kernel/系统 Bug**——强调了推理工程质量对 AI 系统可靠性的决定性影响。
+
+### 8.5 多节点推理与容错
+
+**NVLink 互联与新型 GPU 集群**：
+- NVIDIA Blackwell GPU 及 NVL 72：72 块 GPU 通过高速互联连接
+- 万亿参数模型分摊到 72 块 GPU 上 → 需要考虑容错：连接器是塑料的（不是金属），太紧会导致 NVLink 不稳定
+- 给芯片加风扇和热管理后，仍需应对单 GPU 故障场景
+
+**核心问题**：当模型分布在 64 块 GPU 上为数百万用户服务时，一块 GPU 出故障怎么办？容错机制是大规模推理的新前沿。
+
+### 8.6 智能体工作流 vs 批处理的架构选择
+
+> CS336 P18 Q&A 视角：不同用例对架构的选择有显著区别。
+
+| 用例 | KV Cache 重要性 | 理想架构 |
+|:---|:---|:---|
+| 智能体工作流（多轮对话） | **极高**——KV Cache 需保持"热" | 因果注意力 + GQA/MLA 压缩 |
+| 大规模批处理（翻译/摘要） | 较低——每个文档只看一次 | 可用双向注意力（Encoder-only），无需生成大量 token |
+
+DeepSeek 的 MLA 对 KV Cache 做了激进压缩，在智能体工作流中优势明显；而批处理场景下 KV Cache 重要性低，甚至可以用 BERT 类模型做一次双向注意力后输出向量。
+
 - **Prefill/Decode 分离部署（Disaggregated Serving）**：Prefill 节点（计算密集）和 Decode 节点（访存密集）独立扩展，各自优化硬件配置（DistServe, Splitwise, Mooncake）
 - **KV Cache 压缩**：通过蒸发（eviction）、合并（merging）和低秩近似压缩 KV Cache，支持超长上下文（H2O, Scissorhands）
 - **跨请求 KV 共享**：多请求共享相同中间层 KV Cache，提升多租户效率
 - **KV Cache 感知路由**：调度器根据 KV Cache 命中率路由请求到最优节点
 - **分层 KV 存储**：GPU HBM → CPU DDR → NVMe SSD 的三级 KV Cache 存储
+- **跨层 KV 共享（CLA）**：将 GQA 的"头间共享"推广到"层间共享"，相邻层复用同一份 KV Cache，沿 Pareto 前沿进一步压缩
+- **推理友好的新架构**：KV Cache 与注意力的构建方式从根本上决定了推理的访存瓶颈；状态空间模型、线性注意力、扩散式非自回归生成等"为推理设计"的架构蕴含数量级的改进空间
 
 ## References
 

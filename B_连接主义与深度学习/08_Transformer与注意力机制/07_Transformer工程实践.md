@@ -35,6 +35,7 @@ Transformer 训练中常见的数值问题：
 - **softmax 溢出**：点积过大导致 exp 溢出（用缩放因子和 log-softmax 解决）
 - **梯度爆炸/消失**：深层网络梯度不稳定（用 Pre-LN + 梯度裁剪解决）
 - **混合精度训练**：FP16/BF16 下的数值范围问题（用损失缩放或 BF16 解决）
+- **训练中损失尖峰/爆炸**：大模型训练中损失突然尖峰甚至无法恢复（用 z-loss、QK-Norm、logit softcapping 等架构级干预解决，见 §4.8）
 
 ### 3.3 内存优化
 
@@ -260,6 +261,39 @@ attn_output = F.scaled_dot_product_attention(
 | **3D 并行** | DP + TP + PP | 千亿级模型 |
 | **序列并行** | 将序列维度切分到多卡 | 长序列训练 |
 
+### 4.8 训练稳定性干预（大模型时代的关键工程）
+
+> 训练成本动辄数百万美元，"训练到一半损失爆炸且无法恢复"是不可接受的失败模式（Stanford CS336 将稳定性技巧与架构同讲——两者关系密切）。
+
+**危险区：两处 softmax**。指数运算（快速爆炸）+ 除法（分母趋零）都不稳定：
+1. **输出端 softmax**（词表概率分布）
+2. **注意力 softmax**（QK 内积归一化）——大量退化现象发生地
+
+#### 输出端：z-loss
+
+对数概率 $\log p = u - \log Z$：$u$（模型输出 logit，残差流的叠加）通常表现良好；$\log Z$（对数归一化因子）可能极大/极小 → 数值爆炸。利用 softmax 的过参数化性质（给 $u$ 加常数不改变输出，可在归一化项与输出间抵消），在损失中加入：
+
+$$\mathcal{L} = \mathcal{L}_{LM} + \lambda (\log Z)^2$$
+
+惩罚 $\log Z$ 偏离 0（即 $Z$ 偏离 1）→ 整个表达式数值稳定。出乎意料地有效；**BLOOM 是首个采用的开源模型**，OLMo 等后续沿用。MoE 路由器上的同型技巧（router z-loss）见 [[14_MoE架构]]。
+
+#### 注意力端：QK-Norm
+
+在 Q、K 相乘（送入 softmax）之前各加一个 RMSNorm：softmax 输入的尺度被强制控制在 ~1，从源头防止注意力 logit 爆炸。
+- 源自多模态/视觉大模型（ViT-22B、Chameleon），后被语言模型广泛采纳，如今已是大多数新模型的标准配置
+- 多次独立训练的对照显示**不影响性能**，还能容忍稍高的学习率
+- 与总原则一脉相承：**遇到不稳定，就在更多地方加 LayerNorm**——演化路径为 Pre-Norm（计算前）→ 激活后 norm → QK-Norm（注意力内部）
+
+#### 注意力端：Logit Softcapping（硬干预）
+
+对进入 softmax 的注意力 logits 做 tanh 软截断，限定上下界：
+
+$$\text{logits}' = c \cdot \tanh(\text{logits} / c)$$
+
+- Gemma 2/3/4 采用；比 QK-Norm 更"强硬"——输出有界，绝对安全
+- 代价：超过阈值后无法表达"非常确定"的注意力信号。NVIDIA 的系统性对照显示：单纯 softcapping 反而导致质量下降，QK-Norm 表现更优
+- 定位：QK-Norm 是默认选择，softcapping 更像出现严重退化时的保险手段
+
 ## 5. 关键方法/模型
 
 ### 5.1 nanoGPT
@@ -325,3 +359,4 @@ NVIDIA 的大模型训练框架，核心是张量并行（TP）和流水线并�
 - **自动并行**：Alpa、Galvatron 等自动搜索最优并行策略
 - **训练-推理一体化**：Megatron-LM 和 vLLM 的边界逐渐模糊
 - **硬件多样化**：AMD MI300、Intel Gaudi、Google TPU、Tenstorrent 等非 NVIDIA 硬件的 Transformer 优化
+- **稳定性干预成为标配**：QK-Norm 从多模态迁移到语言模型后已成为大多数新模型的默认组件；z-loss 被 BLOOM、OLMo 等开源模型验证（§4.8）

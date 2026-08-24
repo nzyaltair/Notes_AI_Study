@@ -110,7 +110,46 @@ $$M_{\text{KV}} = 2 \times n_{\text{layers}} \times \text{batch} \times n_{\text
 - **动态扩展策略**：按需分配，利用率高但有性能开销
 - **PagedAttention 混合策略**：按页分配，兼顾利用率和性能
 
-## 5. 关键方法与模型
+### 4.7 KV-Cache 分层存储与卸载
+
+> 视角来自 Stanford CS336 (2026) Lecture 18 嘉宾讲座（Dan Fu, Together AI）的生产实践经验。
+
+在生产推理服务中，KV-Cache 的需求量远超 GPU 显存容量——尤其当上下文达到百万级 token、且需要同时服务大量用户的对话历史时。解决方案是构建**三级缓存层级**：
+
+| 层级 | 介质 | 延迟 | 适用场景 |
+|:---|:---|:---|:---|
+| **L1: GPU HBM** | GPU 高带宽内存 | ~400 cycles | 当前活跃请求的 KV-Cache |
+| **L2: CPU DDR** | 主机内存 | ~10 μs | 最近活跃但未在推理中的对话 |
+| **L3: NVMe SSD** | 本地固态硬盘 | ~100 μs | 冷却但可能再次访问的对话历史 |
+
+#### 4.7.1 驱逐与预取策略
+
+这与操作系统的内存管理高度同构（页面置换问题）：
+
+- **LRU 驱逐**：GPU 显存满时，将最久未访问的 KV-Cache 逐级下推（GPU → CPU → SSD）。OS 经典理论表明 LRU 与最优策略的差距不超过 2 倍
+- **预取**：当用户重新打开一个月前的旧对话时，系统可预测性地将 KV-Cache 从 SSD 预加载到 GPU——“预测未来”是理想调度，实际靠各种启发式策略
+- **卸载并非适用于所有负载**：
+  - **智能体/对话工作流**：KV-Cache 需要保持“热”（常驻 GPU），因为用户可能随时继续对话——卸载会严重损害延迟
+  - **批量处理**：每个文档只处理一次（如翻译、摘要），KV-Cache 用完即弃——无需卸载
+  - 决策关键：根据应用的**回合间隔**判断是否值得将 KV-Cache 压到 GPU 上
+
+#### 4.7.2 生产环境的隐含信号
+
+- **CPU 性能的重要性**：Jensen Huang 近年特别强调 CPU 性能——因为上一代 CPU 内存带宽成了 KV-Cache 回读的瓶颈，$50 万的机器被 $1000 的 CPU 拖后腿
+- **OpenAI 抢购 SSD/内存的传闻**：原因之一就是为了构建大规模 KV-Cache 层级存储
+- **DeepSeek MLA 的压缩策略**：对 KV-Cache 做激进压缩，实质是在减少 L1 层的压力——对智能体工作流（需保持 KV 热）尤为重要
+
+#### 4.7.3 与操作系统调度的同构性
+
+KV-Cache 分层管理的逻辑与 1970s 操作系统课的经典调度图几乎一模一样——唯一区别是右边多了一层 GPU：
+
+```
+应用太多 → CPU 内存满 → 换页到磁盘
+          ↓ (同构)
+请求太多 → GPU 显存满 → 卸载 KV-Cache 到 CPU/SSD
+```
+
+详见 [[../../K_AI工程化/03_推理工程/02_KV Cache与连续批处理|K-03 KV Cache 与连续批处理]] 的生产环境实践。
 
 - **PagedAttention**（vLLM, Kwon et al. 2023）：分页 KV-Cache 管理，吞吐量提升 2-4x
 - **StreamingLLM**（Xiao et al. 2023）：Attention Sink 机制，支持无限长度推理
@@ -154,7 +193,7 @@ $$M_{\text{KV}} = 2 \times n_{\text{layers}} \times \text{batch} \times n_{\text
 ## 9. 前沿发展
 
 - **MLA 普及**：DeepSeek-V2/V3 验证了潜在注意力的有效性，可能成为新一代架构标准
-- **KV-Cache 卸载**：将不活跃的 KV-Cache 页卸载到 CPU 内存或 SSD，突破 GPU 显存限制
+- **KV-Cache 卸载**：将不活跃的 KV-Cache 页卸载到 CPU 内存或 SSD，突破 GPU 显存限制。生产环境已形成 GPU HBM → CPU DDR → NVMe SSD 的三级缓存层级，延迟从 ~400 cycles 逐级升高至 ~100 μs；驱逐采用 LRU 策略，预取依赖启发式预测（§4.7）
 - **语义感知缓存压缩**：基于注意力模式和语义重要性自适应压缩 KV-Cache
 - **跨请求 KV-Cache 共享**：在多用户场景下共享公共 prompt 的 KV-Cache
 - **KV-Cache 原生量化**：FP8 KV-Cache 在 Hopper 架构上的硬件加速

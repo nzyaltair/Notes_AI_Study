@@ -47,7 +47,7 @@ RLHF中PPO优化的目标为：
 
 $$J(\phi) = \mathbb{E}_{(x,y) \sim p_\phi}\left[r(x,y)\right] - \beta \, D_{KL}\left(p_\phi \| p_{ref}\right)$$
 
-对此优化问题求解，可得最优策略的闭式解：
+DPO 推导中唯一（也是最强）的假设：**π 非参数化**——策略可以是任意分布（能近似任何东西），而非被参数化的神经网络。在此假设下可直接写出上述问题的全局最优（闭式）解：
 
 $$\log p_\phi^*(y|x) = \log p_{ref}(y|x) + \frac{r(x,y)}{\beta} + C(x)$$
 
@@ -73,6 +73,8 @@ DPO实际上学习了一个隐式奖励模型：
 $$\hat{r}(x,y) = \beta \log \frac{p_\phi(y|x)}{p_{ref}(y|x)}$$
 
 这个隐式奖励可以直接从训练后的策略中提取，用于分析或下游任务。
+
+**梯度直觉**：DPO 梯度对每一对数据做两件事——提高赢者（$y_w$）的概率、压低输者（$y_l$）的概率，且步长自适应于隐式奖励模型"错得多离谱"：若当前策略已给 $y_w$ 打出很高奖励，只走一小步；若模型认为两者概率相当（隐式奖励差≈0 而实际有偏好），则迈出大得多的步。本质是"朝好数据走正梯度步、朝坏数据走负梯度步"这一最朴素想法的按误差加权版本——DPO 相比 PPO 简单得多的全部代价与收益都系于此。
 
 ### 4.4 关键超参数
 
@@ -106,6 +108,23 @@ Iterative DPO通过多轮迭代克服DPO离线学习的局限：
 4. 重复上述过程
 
 这种方法结合了DPO的简单性和RLHF的在线探索能力。
+
+### 4.7 PPO 替代方案的失败史
+
+在 DPO 之前，"能否不用 PPO"已有多次尝试，失败经验值得知道（避免研究重复踩坑）：
+
+| 尝试 | 做法 | 结果 |
+|------|------|------|
+| 好/坏标记 SFT | 好例子前加"好"标记、坏例子前加"坏"标记做 SFT，生成时以好开头诱导 | 行不通 |
+| 只用好数据训练 | 仅在人工精选的优质数据上训练 | 效果不佳 |
+| RM 筛选 + SFT | 拿 LM 输出让 RM 打分，只挑 RM 认可的部分回炉训练 | 稍差于 RL（拒绝采样一族，多少有点用） |
+
+### 4.8 DPO vs PPO 的实务结论
+
+- **非前沿场景差别不大**：除非在最前沿训练顶尖模型，DPO 与 PPO 的差距很小——DPO 够用（Llama 系列核心 RLHF 原语即 DPO）
+- **结果对实验细节极敏感**：AI2 Tulu 2 报告 PPO 优于 DPO；Tulu 3 修正 DPO 实现细节后又反超 PPO——"谁更好"取决于执行质量，是深度学习论文结果脆弱的典型体现
+- **Llama 的迭代 DPO 外循环**：SFT → DPO → 用 DPO 模型生成候选样本 → 拒绝采样筛选 → 重复；外循环之上核心原语仍是 DPO
+- **变体大多只在修正特定 hack**：CPO 改变权重形式；长度归一化 DPO（类 SimPO）按长度归一化以对抗长度 hack——这类偏好学习特有的问题总会冒出来，但对核心算法影响不大
 
 ## 5. 关键方法/模型
 
@@ -170,6 +189,7 @@ Iterative DPO通过多轮迭代克服DPO离线学习的局限：
 - **为什么 DPO 需要参考模型？** 参考策略（通常是 SFT 模型）提供 KL 正则化，防止模型为迎合偏好而退化；SimPO/ORPO 等变体去除了它。
 - **DPO 为什么容易过拟合？** 偏好数据通常较少，且损失直接拉大 chosen/rejected 概率差，易在少量数据上过拟合；IPO 用平方损失缓解。
 - **DPO 和 GRPO 的区别？** DPO 离线、无显式奖励模型；GRPO 仍是在线 RL，用组内相对优势估计奖励，探索更强但更复杂。
+- **DPO 和 PPO 到底谁好？** 非前沿场景差别不大；结果对实现细节极敏感（Tulu 2 说 PPO 好、Tulu 3 说 DPO 做对了更好）。DPO 简单稳定成本低，是大多数开源对齐的默认选择；需要在线探索或可验证奖励的场景用 GRPO/PPO 系。
 
 ## 9. 前沿发展
 
@@ -202,3 +222,7 @@ Iterative DPO通过多轮迭代克服DPO离线学习的局限：
 - Azar et al., *A General Theoretical Paradigm to Understand Learning from Human Feedback* (IPO), 2023. https://arxiv.org/abs/2310.12036
 - Ethayarajh et al., *KTO: Model Alignment as Prospect Theoretic Optimization*, ICML 2024. https://arxiv.org/abs/2402.01306
 - Meng et al., *SimPO: Simple Preference Optimization with a Reference-Free Reward*, 2024. https://arxiv.org/abs/2405.14734
+- Xu et al., *Contrastive Preference Optimization: Your Language Model is Secretly a Reward Model* (CPO), 2024. https://arxiv.org/abs/2401.08415
+- Ivison et al., *Camels in a Changing Climate: Tulu 2 Suite*, 2023. — PPO 优于 DPO 的对照结论
+- Lambert et al., *Tulu 3: Pushing Frontiers in Open Language Model Post-Training*, 2024. — 修正细节后 DPO 反超 PPO；全管线模型标注的开源后训练参考
+- Stanford CS336 (2025). Lecture: Mid/Post-Training. — 非参数假设推导、PPO 替代方案失败史与 DPO/PPO 实务对比的讲授来源

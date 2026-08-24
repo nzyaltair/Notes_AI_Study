@@ -18,9 +18,11 @@
 | 2022 | S4 (Gu et al.) | 引入结构化对角加低秩矩阵，使 SSM 的计算和存储从 $\mathcal{O}(T^2)$ 降至 $\mathcal{O}(T \log T)$，在 Long Range Arena 基准上超越所有现有方法 |
 | 2023 | S5 / H3 / Hyena | S5 提出并行扫描；H3（Hungry Hungry Hippos）将 SSM 与门控结合；Hyena 用长卷积替代注意力 |
 | 2023.12 | **Mamba** (Gu & Dao) | 引入**选择性 SSM**：使 $B, C, \Delta$ 依赖于输入 $x$，打破了 LTI 假设。结合硬件感知的并行扫描算法，实现了线性时间的训练和推理，首次使 SSM 在语言建模上匹配 Transformer |
-| 2024.05 | Mamba-2 / SSD (Dao & Gu) | 提出 SSD（State Space Duality）框架，统一了结构化 SSM 和线性注意力的矩阵变换视角。通过矩阵乘法的结构化分解，相比 Mamba 提速 2~8 倍 |
+| 2024.05 | **Mamba-2 / SSD** (Dao & Gu) | 提出 SSD（State Space Duality）框架，统一了结构化 SSM 和线性注意力的矩阵变换视角。通过矩阵乘法的结构化分解，相比 Mamba 提速 2~8 倍 |
+| 2024.06 | Gated DeltaNet (Yang et al.) | 在线性注意力递归上加双重门控（遗忘/输入）与 DeltaRule 投影更新，表达力更强 |
 | 2024 | Jamba (AI21 Labs) | SSM + Transformer 混合架构，交替使用 Mamba 层和注意力层，在长上下文任务中平衡效率和质量 |
 | 2024 | Mamba 扩展到视觉和基因组 | Vision Mamba (Vim)、VMamba、DNA Mamba 等，将 SSM 应用到多模态和科学计算领域 |
+| 2025 | **混合架构进入大规模前沿模型** | MiniMax-M1（7:1 线性注意力）、Qwen3-Next（3:1 Gated DeltaNet）、Nemotron 3（Mamba-2 轻量层）等开源模型验证了线性时间层与注意力混合的可行性 |
 
 ## 3. 核心概念
 
@@ -75,6 +77,16 @@ $$B_t = s_B(x_t), \quad C_t = s_C(x_t), \quad \Delta_t = \tau_{\Delta}(\text{Par
 
 给定序列操作 $x_1 \oplus x_2 \oplus \cdots \oplus x_T$，并行扫描在前缀和（Prefix Sum）的框架下高效计算所有中间状态。对于 SSM 的逐时间步递推，可将 $h_t$ 的计算转化为高度并行的前缀扫描操作，在 GPU 上实现接近 $\mathcal{O}(\log T)$ 的并行度。这是 Mamba 能够以线性复杂度训练的工程关键。
 
+### 3.6 从线性注意力视角理解现代 SSM：门控设计法则
+
+Mamba-2、Gated DeltaNet 等现代 SSM 虽然源自状态空间理论推导，但机制上可以视为**线性注意力的递归形式加上门控扩展**（CS336 Lecture 4 的统一叙事）：
+
+1. **线性注意力**：去掉 softmax 后利用结合律，$\phi(K)^TV$ 成为固定大小状态 $S$，可增量更新——得到「训练用密集矩阵乘法、推理用递归」的并行/递归二重性（见 [[../08_Transformer与注意力机制/05_高效注意力机制|高效注意力机制]] §4.4）
+2. **Mamba-2**：在线性注意力递归上加**输入门控 $\gamma_t$**（只依赖当前输入、不依赖状态），控制多少历史状态传递到未来——解决线性注意力"信息只能一直累加、不能遗忘"的问题
+3. **Gated DeltaNet**：再加第二个门控 $\beta_t$（遗忘/写入门），并用 DeltaRule 投影替换简单的累加写入（见 4.5 节）
+
+> **门控设计法则**：只要递归结构中新增的门控项**只依赖输入、不依赖状态**，并行训练与串行推理的二重性就得以保持。这是从 LSTM 时代"知道何时遗忘"的经验到可并行化架构的桥梁——大量被验证有效的线性时间方法最终都收敛为这种「类 LSTM」的简单递归形式。
+
 ## 4. 技术原理
 
 ### 4.1 S4 的卷积模式（LTI 系统）
@@ -110,7 +122,27 @@ SSD（State Space Duality）的核心理念：SSM 和线性注意力是**同一�
 
 Mamba-2 将选择性 SSM 重新表述为结构化矩阵乘法，使其能利用 GPU 张量核心（Tensor Cores）的矩阵乘法硬件加速。相比 Mamba-1 在训练时可提速 2~8 倍，同时保持推理时的线性复杂度。这一结果揭示了"注意力不需要 Softmax"的可能性，是 SSM 与 Transformer 两条技术路线在理论上的重要会师点。
 
-### 4.4 时间复杂度对比
+从线性注意力视角看（见 3.6 节），SSD 揭示的正是并行/递归二重性：训练时用稠密（分块）矩阵乘法形式，推理时切换到递归形式获得固定状态——历史上 SSM/LSTM 相对注意力的最大劣势（无法高效并行训练）由此被消除，剩下的才是纯粹的表达能力权衡。
+
+### 4.4 Gated DeltaNet：门控增量更新
+
+Gated DeltaNet（Yang et al., 2024）是目前应用最广的"现代 SSM/线性注意力"层之一，在 Mamba-2 风格的状态更新上引入两个改动：
+
+**1. 双重门控**：
+- $\gamma_t$（衰减门，即 Mamba-2 的门控）：控制历史状态向未来传递多少
+- $\beta_t$（输入门）：控制当前时间步写入多少信息——$\beta_t = 0$ 意味着当前 token 完全不写入状态（让人想起 LSTM 的输入门/遗忘门）
+
+**2. DeltaRule 投影更新**（继承自 DeltaNet）：写入新信息的同时，**擦除状态中当前 key 方向上已有的内容**：
+
+$$S_t = \gamma_t \, S_{t-1} \, (I - \beta_t k_t k_t^\top) + \beta_t\, v_t k_t^\top$$
+
+直观理解：为当前 key $k_t$ 写入信息前，先用 $(I - \beta_t k_t k_t^\top)$ 把状态里与 $k_t$ 同方向的旧分量投影出去——"先删除同 key 旧内容，再写入新内容"，而非简单累加（未做单位归一化，因此只是近似的投影器）。这解决了纯累加写入的冗余问题，等价于在状态空间中求解**在线最小二乘**问题。
+
+**有意思的再发明史**：同样的投影更新在快速权重编程（fast weight programmers）和测试时训练（TTT）领域基于完全不同的设计原则被独立得出（见 9.5 节）。
+
+**大规模验证**：Qwen3-Next 及其后续的 Qwen3.5 采用 3:1（Gated DeltaNet : 完整注意力）混合架构，解码吞吐量远高于 Qwen3，且性能几乎无损——是目前最优秀的开源模型之一。
+
+### 4.5 时间复杂度对比
 
 | 模型 | 训练复杂度 | 推理复杂度（逐 token） | 长程依赖路径 |
 |:---|:---|:---|:---|
@@ -129,6 +161,7 @@ Mamba-2 将选择性 SSM 重新表述为结构化矩阵乘法，使其能利用 
 | Smith et al., *Simplified State Space Layers for Sequence Modeling* (ICLR 2023) | S5：简化 SSM 架构，引入并行扫描 | 使 SSM 更易于实现和理解 |
 | Fu et al., *Hungry Hungry Hippos* (ICLR 2023) | H3：SSM + 门控，在语言建模上接近 Transformer | 证明了 SSM 在语言建模上的竞争力 |
 | Gu & Dao, *Mamba: Linear-Time Sequence Modeling with Selective State Spaces* (2023) | 选择性 SSM + 硬件感知并行扫描 | 首次实现线性时间 SSM 在语言建模上匹配 Transformer |
+| Yang et al., *Gated Delta Networks* (2024) | 双重门控 + DeltaRule 投影更新 | 被 Qwen3-Next 等大规模混合架构采用 |
 | Dao & Gu, *Transformers are SSMs* (2024) | Mamba-2 / SSD：统一 SSM 与注意力的矩阵框架 | 理论突破 + 实际 2~8x 加速 |
 | AI21 Labs, *Jamba* (2024) | SSM-Transformer 混合架构 | 展示了混合架构在长上下文任务上的实际优势 |
 
@@ -144,8 +177,8 @@ Mamba-2 将选择性 SSM 重新表述为结构化矩阵乘法，使其能利用 
 ### 局限
 1. **较年轻**：SSM 生态（预训练模型、框架支持、优化方案）远不如 Transformer 成熟
 2. **上下文学习能力待验证**：SSM 在 in-context learning 等需要"直接从上下文提取模式"的能力上，是否及如何超越注意力机制，仍在研究中
-3. **选择性机制的成本**：输入依赖的参数化增加了计算开销，Mamba-2 通过矩阵重构缓解
-4. **在部分任务上仍有差距**：在某些短上下文生成任务上，SSM 的生成质量仍低于同规模 Transformer
+3. **状态容量与上下文长度的权衡（没有免费午餐）**：固定大小状态要压缩整个上下文，状态规模与上下文长度之比决定信息损失——想要极小的状态就很难把大上下文的所有信息都压进去；状态做到与上下文一样大虽然可行，但计算开销也会随之上升。softmax 注意力的 all-to-all 连接则在表示能力上依然更强、更好训练
+4. **在部分任务上仍有差距**：在某些短上下文生成任务上，SSM 的生成质量仍低于同规模 Transformer；长上下文精确检索（如 needle-in-a-haystack）对固定状态架构尤其困难
 5. **不应视为普遍替代**：SSM 相对 Transformer 的优势高度依赖任务类型（长序列 vs 短序列）、硬件（是否有张量核心加速）和训练配置
 
 ## 7. 应用场景
@@ -168,9 +201,11 @@ Mamba-2 将选择性 SSM 重新表述为结构化矩阵乘法，使其能利用 
 
 ## 9. 前沿发展
 
-### 9.1 大规模语言模型的 SSM 替代
+### 9.1 大规模语言模型的 SSM 替代：混合架构落地
 
-Mamba-2 和 Jamba 证明了 SSM 可扩展到数十亿参数规模。研究焦点包括：MoE + SSM（MoE-Mamba）、SSM 在 Mixture-of-Depths（MoD）中的应用、SSM 的 Scaling Laws 研究。
+Mamba-2 和 Jamba 证明了 SSM 可扩展到数十亿参数规模。2025 年后混合架构进入开源前沿模型：MiniMax-M1（7:1 线性注意力混合）、Qwen3-Next/Qwen3.5（3:1 Gated DeltaNet 混合）、Nemotron 3（Mamba-2 轻量层与 softmax 注意力交替，性能与 Qwen3-Thinking、GPT-OSS 同档）。但**完全不含 softmax 注意力的纯线性架构尚未有人在大规模上跑通**。
+
+字节 Seed 与 UC Santa Cruz 的对照研究给出了混合比例的经验结论：低比例替换 RNN 层几乎无性能损失，超过某个临界点后长上下文性能明显下降，全部替换为 RNN 层时退化显著——单键检索与 QA 等任务均呈现稳定下降趋势。研究焦点还包括：MoE + SSM（MoE-Mamba）、SSM 在 Mixture-of-Depths（MoD）中的应用、SSM 的 Scaling Laws 研究。
 
 ### 9.2 统一框架理论
 

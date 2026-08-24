@@ -15,6 +15,9 @@ Scaling Laws（缩放定律）描述了语言模型性能与模型规模、数�
 | 2022.03 | **Chinchilla** (DeepMind) | 计算最优比例：参数与数据等比例缩放 |
 | 2022.06 | Emergent Abilities (Wei et al.) | 系统描述涌现能力现象 |
 | 2023 | Chinchilla Scaling 被广泛采用 | LLaMA 等开源模型遵循 Chinchilla 比例 |
+| 2024 | MiniCPM / DeepSeek LLM | 开源社区系统复现 Chinchilla：μP、WSD 调度、超参缩放 |
+| 2024-2025 | Hunyuan-Large / Kimi K2 / MiniMax-01 | MoE 缩放定律与架构缩放对比成为标配实验 |
+| 2025 | Step Law（StepFun） | 超参数缩放定律的大规模系统验证 |
 | 2023+ | 逆 Scaling / U形 Scaling | 部分任务随规模先变差再变好 |
 
 ## 3. 核心概念
@@ -182,6 +185,40 @@ $$N^* = \frac{C}{6 \times 20} = \frac{C}{120}, \quad D^* = 20 N^*$$
 
 > 注意：LLaMA-2/3 等模型已远超 Chinchilla 比例（$D/N \gg 20$），这被称为"过度训练"（Overtraining），目的是在推理阶段获得更好的性能-成本比（推理次数远多于训练次数）。
 
+### 开源模型的 Scaling 实践（2024-2025）
+
+Chinchilla 之后，开源社区在真实训练规模上复现并扩展了缩放分析。针对"超参数随规模漂移"这一核心难题，形成两条主流技术路线：
+
+**路线一：参数化不变性（MiniCPM，2024）**
+
+- 采用 μP 风格参数化（缩放嵌入输出、按 $\sqrt{\text{层数}}$ 缩放残差分支、按 fan-out/fan-in 比例相关因子缩放矩阵初始化、按参数类型设置学习率乘子、缩放输出头），使**最优学习率在模型宽度变化时保持不变**——小模型上扫出的最优学习率可直接用于大模型（详见 [[../../K_AI工程化/02_训练工程/05_超参数搜索|超参数搜索]]）。
+- 配合 [[../../A_基础与范式/02_优化理论与方法/05_学习率调度与训练策略|WSD 调度]]，回滚稳定阶段检查点再重新衰减即可低成本扫描数据规模，无需从头重训；MiniCPM 借此在模型、数据两个维度复现了 Chinchilla 分析，其拟合得到的计算最优数据/参数比显著高于 20。
+- "风洞实验"的可靠外推范围：MiniCPM 缩放阶梯上的最大实验模型与最终发布模型（1.2B/2.4B）相差约 5 倍。
+
+**路线二：拟合超参数缩放定律（DeepSeek LLM，2024）**
+
+- 不追求不变性，而是在多个规模上对学习率 × batch size 做网格搜索，直接拟合**最优学习率、最优 batch size 随非嵌入计算量的幂律**，外推出 7B/67B 的训练配置。
+- 其缩放定律对实际训练的大模型损失预测相当准确，也再次验证 Chinchilla 分析在真实开源规模上成立。Qwen2.5/Qwen3 等后续开源报告沿用同套流程，已成为标准做法。
+
+**MoE 缩放定律（Kimi K2、Hunyuan-Large）**
+
+- 转向 MoE 的团队普遍重做 isoFLOP 分析，把**激活参数**作为核心变量：固定 FLOPs 下稀疏度越高验证损失越低，但收益递减，据此定量选定稀疏度与 token/激活参数配比（Hunyuan-Large 约 96 token/激活参数）。
+- 只要以激活参数为基准，稠密模型的超参缩放规律对 MoE 基本适用（Step Law 明确将稠密与 MoE 统一在同一超参定律下）。
+
+**损失到下游能力的映射（Llama 3）**
+
+- 在常规缩放之外，Llama 3 拟合了**对数损失 → 下游基准准确率的 S 型（sigmoid）映射**，使"以损失为锚"的缩放预测延伸到基准指标；但数据点相对拟合曲线存在系统性偏离，只能作参考而非绝对真理。
+
+**架构比较的缩放证据（MiniMax-01）**
+
+- 对 softmax 注意力、lightning（线性）注意力与混合架构做缩放对比：三者在多数算力水平下的缩放行为与最优模型规模接近，据此选定混合架构——"用 scaling laws 做架构决策"的典型范例。
+
+**经验教训**
+
+- 缩放拟合的常数**高度依赖数据配方**：换数据后最优学习率/batch size 会整体偏移，搬用他人规律前需确认实验设置足够相似。
+- 趋势可能在更大规模处突然失效：多个数量级上表现良好的拟合也可能越过某个规模阈值后偏离、崩坏（Stanford modular-norm 项目公开过此类失败案例）。
+- 预训练-后训练的**联合缩放**仍是开放问题；预训练数据覆盖度/多样性与后训练效果的关联是新兴研究方向。
+
 ## 6. 优势与局限
 
 ### 优势
@@ -215,9 +252,26 @@ $$N^* = \frac{C}{6 \times 20} = \frac{C}{120}, \quad D^* = 20 N^*$$
 ## 9. 前沿发展
 
 - **过度训练**：LLaMA-2/3 远超 Chinchilla 比例，牺牲训练效率换取推理效率
-- **MoE 缩放**：混合专家模型的 Scaling Laws 与稠密模型不同
+- **MoE 缩放**：以激活参数为核心变量的缩放分析已成为万亿级开源模型（Kimi K2、Hunyuan-Large）的标配实验
+- **超参数缩放**：最优学习率/batch size 随规模的幂律可拟合、可外推（DeepSeek LLM、StepFun Step Law），详见 [[../../K_AI工程化/02_训练工程/05_超参数搜索|超参数搜索]]
+- **优化器缩放**：Muon 等矩阵正交化优化器在计算最优训练下相对 AdamW 约有 2× 计算效率（Moonlight），但公平调参下增益随规模缩小，详见 [[../../A_基础与范式/02_优化理论与方法/07_大模型训练优化|大模型训练优化]]
+- **损失-能力映射**：Llama 3 拟合对数损失与下游准确率的 S 型关系，把缩放预测延伸到基准指标
 - **数据质量缩放**：研究数据质量与数据量的交互作用
 - **逆 Scaling**：某些任务随规模变差（如社会偏见），需专门研究
 - **多模态缩放**：Scaling Laws 在视觉-语言模型中的适用性
 - **推理时缩放**：o1 等推理模型在推理阶段投入更多计算，扩展了缩放维度
+- **后训练联合缩放**：预训练-后训练协同效应尚无成熟理论，是当前开放问题
 - **Chinchilla 修正**：2024 年研究指出 Chinchilla 的某些估计可能仍有偏差
+
+## References
+
+- Kaplan, J. et al. "Scaling Laws for Neural Language Models." arXiv 2001.08361, 2020.
+- Hoffmann, J. et al. "Training Compute-Optimal Large Language Models." (Chinchilla) arXiv 2203.15556, 2022.
+- Hu, S. et al. "MiniCPM: Unveiling the Potential of Small Language Models with Scalable Training Strategies." arXiv 2404.06395, 2024.
+- DeepSeek-AI. "DeepSeek LLM: Scaling Open-Source Language Models with Longtermism." arXiv 2401.02954, 2024.
+- Meta AI. "The Llama 3 Herd of Models." arXiv 2407.21783, 2024.
+- Sun, X. et al. "Hunyuan-Large: An Open-Source MoE Model with 52 Billion Activated Parameters by Tencent." arXiv 2411.02265, 2024.
+- MiniMax. "MiniMax-01: Scaling Foundation Models with Lightning Attention." arXiv 2501.08313, 2025.
+- Li, H. et al. (StepFun) "Predictable Scale: Part I, Step Law — Optimal Hyperparameter Scaling Law in Large Language Model Pretraining." arXiv 2503.04715, 2025.
+- Kimi Team. "Kimi K2: Open Agentic Intelligence." arXiv 2507.20534, 2025.
+- Stanford CS336 (2025). Lecture: Scaling Laws II.（开源实践与超参缩放部分的本笔记整理来源）

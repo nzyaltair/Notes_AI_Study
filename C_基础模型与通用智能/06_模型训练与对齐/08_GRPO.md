@@ -16,6 +16,8 @@ GRPO的成功证明了无需复杂RLHF流程也能训练出高性能推理模型
 | 2024.2 | DeepSeekMath | GRPO算法首次提出 |
 | 2025.1 | DeepSeek-R1-Zero | 直接在基座模型上GRPO训练 |
 | 2025.1 | DeepSeek-R1 | GRPO + 冷启动数据，推理模型 |
+| 2025.1 | Kimi k1.5 | DPO 风格推导殊途同归于组相对基线 |
+| 2025.3 | Dr. GRPO | 指出 std/长度归一化偏置并提出无偏修正 |
 
 ## 3. 核心概念
 
@@ -53,11 +55,15 @@ $$\tilde{A}_i = \frac{r_i - \text{mean}(r_1, \ldots, r_G)}{\text{std}(r_1, \ldot
 
 这种方法的关键在于：**不需要绝对奖励值精确，只需要组内相对排序正确**。即使奖励函数有系统性偏差，组内标准化也能消除其影响。
 
+**理论视角：GRPO 并非严格的策略梯度**。策略梯度理论只允许减去与动作无关的基线（减法不改变梯度期望，只影响方差）；GRPO 除以组内标准差、并按输出长度归一化，两者都会改变期望更新方向，属于"经验有效的工程修正"而非第一性原理推导（见 4.7 与 Dr. GRPO）。
+
 ### 4.3 策略优化目标
 
 带KL惩罚和PPO裁剪的优化目标：
 
 $$J_{GRPO} = \mathbb{E}\left[\frac{1}{G}\sum_{i=1}^{G}\left(\min\left(\frac{\pi_\theta(o_i|q)}{\pi_{old}(o_i|q)} \tilde{A}_i, \, \text{clip}\left(\frac{\pi_\theta(o_i|q)}{\pi_{old}(o_i|q)}, 1-\epsilon, 1+\epsilon\right) \tilde{A}_i\right) - \beta \, D_{KL}(\pi_\theta \| \pi_{ref})\right)\right]$$
+
+**在线单步更新下的简化**：rollout 后只做一步梯度更新时，新旧策略比率恒为 1，裁剪项失效——GRPO 退化为"组归一化优势的策略梯度 − KL 惩罚"。实现上通常给标准差加 $\varepsilon \approx 10^{-4}$，防止组内奖励完全相同（如全错得零分）时除零。GRPO 足够简单，核心实现一页代码即可复现，这是开源社区几乎全面采用它的直接原因。
 
 ### 4.4 与RLHF的关键区别
 
@@ -87,6 +93,11 @@ DeepSeek-R1使用两类基于规则的奖励：
 3. **GRPO推理训练**：以规则奖励为信号，训练推理能力
 4. **拒绝采样SFT**：从RL模型生成数据，筛选高质量样本
 5. **第二轮GRPO**：结合推理和通用对齐
+
+### 4.7 两个归一化项的副作用
+
+- **长度归一化（按 $|o_i|$ 除）**：错误输出可通过拉长稀释负惩罚（极端情况下趋于"除以无穷大抵消惩罚"），变相鼓励答错时输出冗长；其另一面是使训练中 CoT 长度最终稳定在常数附近而非无限增长。Dr. GRPO 的分析显示，R1 类训练中响应长度增长主要由错误输出驱动（正确答案的 CoT 有长度下限）。
+- **标准差归一化**：放大组内方差小的问题的权重——对二元奖励即太简单（全对）或太难（全错）的问题，与"在能力边缘的中等难度区学习"的理想区间相悖。Dr. GRPO 去掉这两处修正后 token 效率更高（7B 模型 AIME 2024 达 43.3%）。
 
 ## 5. 关键方法/模型
 
@@ -157,3 +168,16 @@ DeepSeek-R1使用两类基于规则的奖励：
 - **从推理到通用对齐**：将GRPO扩展到没有明确答案的通用对齐任务
 - **多模态GRPO**：扩展到视觉/音频等模态
 - **GRPO + DPO混合**：结合在线和离线方法的优势
+
+### 9.4 理论修正与殊途同归
+
+- **Dr. GRPO（2025）**：系统分析 R1-Zero 类训练，指出 GRPO 的 std 归一化与长度归一化引入优化偏置；同时发现 DeepSeek-V3-Base 已天然具备 "aha moment"，Qwen2.5 基座无需提示模板即有较强推理能力
+- **Kimi k1.5（2025）**：从 DPO 风格推导出发（KL 正则目标的解析最大化 + 平方损失匹配奖励模型），取梯度后殊途同归于"均值基线 + KL 正则"的 GRPO——组相对基线像是稳定收敛点，可从多个方向重新发明，说明 RLVR 不必绑定 GRPO
+
+## References
+
+- Shao, Z. et al. "DeepSeekMath: Pushing the Limits of Mathematical Reasoning in Open Language Models." arXiv 2402.03300, 2024.
+- DeepSeek-AI. "DeepSeek-R1: Incentivizing Reasoning Capability in LLMs via Reinforcement Learning." arXiv 2501.12948, 2025.
+- Liu, Z. et al. "Understanding R1-Zero-Like Training: A Critical Perspective."（Dr. GRPO）arXiv 2503.20783, 2025.
+- Kimi Team. "Kimi k1.5: Scaling Reinforcement Learning with LLMs." arXiv 2501.12599, 2025.
+- Stanford CS336 (2025). Lecture: Post-Training — RLVR.（理论分析与案例部分的本笔记整理来源）

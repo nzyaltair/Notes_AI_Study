@@ -201,6 +201,20 @@ scores = scores.masked_fill(mask == 0, float('-inf'))
 | **GQA** | 分组共享 K/V | $n \times g \times d_k \times 2$ | 接近 MHA | LLaMA 2 70B、Mistral |
 | **MLA** | 低秩压缩 K/V | $n \times d_c \times 2$ | 接近 MHA | DeepSeek-V2/V3 |
 
+### 5.6 为什么需要 KV 共享：解码阶段的算术强度分析
+
+（Stanford CS336 视角）服务成本 = FLOPs + 内存访问，两者都要尽可能小。注意力在预填充与解码两个阶段的算术强度截然不同：
+
+| 阶段 | 计算量（量级） | 内存访问（量级） | 算术强度 |
+|:---|:---|:---|:---|
+| 预填充 / 训练（处理整个 prompt） | $B \cdot N \cdot d^2$ | $B \cdot N \cdot d$（+ softmax 的 $N^2$ 项、投影的 $d^2$ 项） | 好：head_dim 足够大、batch/序列够长即可打满 GPU |
+| 增量解码（KV-Cache，逐 token 生成） | 总量不变（分步执行） | $B \cdot N^2 \cdot d$（每步重读全部 KV 与参数） | 差：$\approx \frac{1}{N/d + 1/B}$，需要「大 batch + 短序列」或「极大模型维度」 |
+
+- 自回归生成无法并行，每生成一个 token 都要重读全部 KV-Cache 与参数 → 解码阶段是**访存主导**；序列越长越吃亏 → **小模型 + 长序列的服务最难高效**
+- **MQA**：所有头共享一组 K/V → 瓶颈项缩小 $h$ 倍、算术强度提升，但表达力损失明显（T5 时代实验：质量明显下降；缩小模型规模补成本更糟）
+- **GQA**：分组共享 → MHA 与 MQA 之间的连续可调权衡。GQA 论文的经典实验：MHA 质量最好但成本高，MQA 便宜但质量降，**GQA 以接近 MQA 的成本拿到接近 MHA 的质量**——这就是"现在的模型几乎都采用 GQA"的原因
+- **MLA**：换一种分解结构（低秩潜在 KV），权衡维度不同（见 §5.4）
+
 ## 6. 优势与局限
 
 ### 优势
